@@ -1,0 +1,379 @@
+USE [fmb_mobile_banking]
+GO
+
+/****** Object:  Table [dbo].[Users]    Script Date: 7/16/2026 5:13:52 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Users](
+	[DTYPE] [varchar](31) NOT NULL,
+	[id] [bigint] IDENTITY(1,1) NOT NULL,
+	[dateRegistered] [datetime2](7) NULL,
+	[fullName] [varchar](255) NULL,
+	[lastLogin] [datetime2](7) NULL,
+	[userName] [varchar](255) NOT NULL,
+	[active] [bit] NULL,
+	[emailAddress] [varchar](255) NULL,
+	[mobileNumber] [varchar](255) NULL,
+	[paymentCellNumber] [varchar](255) NULL,
+	[primaryAccountNumber] [varchar](255) NULL,
+	[quickPayAccount] [varchar](255) NULL,
+	[registrationStatus] [varchar](255) NULL,
+	[salt] [varchar](255) NULL,
+	[secret] [varchar](255) NULL,
+	[customerType] [varchar](50) NULL,
+	[country_id] [bigint] NULL,
+	[customerOpType] [varchar](50) NULL,
+	[companyId] [varchar](50) NULL,
+	[corporateUserRoleId] [varchar](50) NULL,
+	[corporateUserHierarchy] [int] NULL,
+	[corporateLimitRange] [varchar](50) NULL,
+	[corporateInitiator] [bit] NULL,
+	[lastDateCorporateUpdated] [date] NULL,
+	[corporateAuthorizer] [bit] NULL,
+	[followWorkflow] [bit] NULL,
+	[corporateUserRoleDesc] [varchar](255) NULL,
+	[lastTransactionString] [varchar](2000) NULL,
+	[lastTransactionTime] [datetime] NULL,
+	[registrationMode] [varchar](10) NULL,
+	[canNotTransact] [varchar](1) NULL,
+	[timeToBeginTransact] [datetime] NULL,
+	[hasUssd] [bit] NULL,
+	[oldUssdAccount] [bit] NULL,
+	[hasMobile] [bit] NULL,
+	[ussdDisabled] [bit] NULL,
+	[imsinumber] [varchar](100) NULL,
+	[userId] [varchar](255) NULL,
+	[cifNumber] [varchar](255) NULL,
+	[idNumber] [varchar](255) NULL,
+	[migratedPin] [bit] NULL,
+	[loginDisabled] [bit] NULL,
+	[loginRetries] [bigint] NULL,
+	[ussdLastLogin] [datetime] NULL,
+	[cachedAccount] [text] NULL,
+	[dateAccountCached] [date] NULL,
+	[defaultLanguage] [varchar](30) NULL,
+	[reasonForProfileDeletion] [varchar](255) NULL,
+	[reasonDescriptionForProfileDeletion] [varchar](255) NULL,
+	[profileDeletionDate] [datetime2](7) NULL,
+	[isDeleted] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UK_5f1li6p28p6lmapjgbi90gscd] UNIQUE NONCLUSTERED 
+(
+	[userName] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[Users] ADD  DEFAULT ((0)) FOR [loginDisabled]
+GO
+
+ALTER TABLE [dbo].[Users] ADD  DEFAULT ((0)) FOR [loginRetries]
+GO
+
+ALTER TABLE [dbo].[Users] ADD  DEFAULT ((0)) FOR [ussdLastLogin]
+GO
+
+ALTER TABLE [dbo].[Users]  WITH CHECK ADD  CONSTRAINT [FKgscfq5w71le3dy8kehf1idn3r] FOREIGN KEY([country_id])
+REFERENCES [dbo].[CountryPartner] ([id])
+GO
+
+ALTER TABLE [dbo].[Users] CHECK CONSTRAINT [FKgscfq5w71le3dy8kehf1idn3r]
+GO
+
+ALTER TABLE [dbo].[Users]  WITH CHECK ADD  CONSTRAINT [FKmltugoxufj1u115v7x893260x] FOREIGN KEY([country_id])
+REFERENCES [dbo].[CountryPartner] ([id])
+GO
+
+ALTER TABLE [dbo].[Users] CHECK CONSTRAINT [FKmltugoxufj1u115v7x893260x]
+GO
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+USE [fmb_mobile_banking]
+GO
+
+/****** Object:  Table [dbo].[Old_Ussd_Account]    Script Date: 7/16/2026 5:16:13 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Old_Ussd_Account](
+	[id] [bigint] IDENTITY(1,1) NOT NULL,
+	[emailAddress] [varchar](255) NULL,
+	[fullName] [varchar](255) NULL,
+	[password] [varchar](255) NULL,
+	[phoneNumber] [varchar](255) NULL,
+	[primaryAccountNumber] [varchar](255) NULL,
+	[userName] [varchar](255) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+USE [fmb_mobile_banking]
+GO
+
+/****** Object:  Table [dbo].[Transactions]    Script Date: 7/16/2026 5:17:51 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Transactions](
+	[DTYPE] [varchar](31) NOT NULL,
+	[id] [bigint] IDENTITY(1,1) NOT NULL,
+	[amount] [numeric](19, 2) NULL,
+	[bankReference] [varchar](255) NULL,
+	[charge] [numeric](19, 2) NULL,
+	[deviceUUID] [varchar](255) NULL,
+	[narration] [varchar](255) NULL,
+	[sourceAccount] [varchar](255) NULL,
+	[status] [varchar](255) NULL,
+	[statusCode] [varchar](255) NULL,
+	[statusDescription] [varchar](255) NULL,
+	[transactionDate] [datetime2](7) NULL,
+	[customerReference] [varchar](255) NULL,
+	[finalResponseCode] [varchar](255) NULL,
+	[gatewayReference] [varchar](255) NULL,
+	[initialResponseCode] [varchar](255) NULL,
+	[destinationAccount] [varchar](255) NULL,
+	[transferProcessor] [varchar](255) NULL,
+	[phoneNumber] [varchar](255) NULL,
+	[customer_id] [bigint] NOT NULL,
+	[biller_id] [bigint] NULL,
+	[product_id] [bigint] NULL,
+	[destinationBank_id] [bigint] NULL,
+	[country_id] [bigint] NULL,
+	[user_id] [bigint] NULL,
+	[receiptNo] [varchar](255) NULL,
+	[tokens] [varchar](255) NULL,
+	[destinationAccountName] [varchar](255) NULL,
+	[channel] [varchar](255) NULL,
+	[sourceAccountCurrency] [varchar](50) NULL,
+	[student_details] [varchar](255) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKfpk1opbvo1sbel6edjgyj97rp] FOREIGN KEY([biller_id])
+REFERENCES [dbo].[Billers] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKfpk1opbvo1sbel6edjgyj97rp]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKg7hbntxrdux3gntpfrcy0tn1g] FOREIGN KEY([destinationBank_id])
+REFERENCES [dbo].[Banks] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKg7hbntxrdux3gntpfrcy0tn1g]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKg7hbntxrdux3gntpfrcy0tn1h] FOREIGN KEY([destinationBank_id])
+REFERENCES [dbo].[Banks] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKg7hbntxrdux3gntpfrcy0tn1h]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKhve4k1flbnrhdpfhxie1jvic5] FOREIGN KEY([country_id])
+REFERENCES [dbo].[CountryPartner] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKhve4k1flbnrhdpfhxie1jvic5]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKl6915cslp01krs0f9d4iuttlr] FOREIGN KEY([customer_id])
+REFERENCES [dbo].[Users] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKl6915cslp01krs0f9d4iuttlr]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKlqt6jhrmjftbn9ffe5fwxe9gd] FOREIGN KEY([product_id])
+REFERENCES [dbo].[Products] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKlqt6jhrmjftbn9ffe5fwxe9gd]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKmw4t1gxqidjikn9ai946flvbm] FOREIGN KEY([country_id])
+REFERENCES [dbo].[CountryPartner] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKmw4t1gxqidjikn9ai946flvbm]
+GO
+
+ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FKsa73iiwgkgfqg8ikmr4jv45o2] FOREIGN KEY([user_id])
+REFERENCES [dbo].[Users] ([id])
+GO
+
+ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FKsa73iiwgkgfqg8ikmr4jv45o2]
+GO
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+USE [fmb_mobile_banking]
+GO
+
+/****** Object:  Table [dbo].[TransferBeneficiaries]    Script Date: 7/16/2026 5:19:18 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[TransferBeneficiaries](
+	[id] [bigint] IDENTITY(1,1) NOT NULL,
+	[accountName] [varchar](255) NULL,
+	[accountNumber] [varchar](255) NULL,
+	[checksum] [varchar](255) NULL,
+	[isLocal] [bit] NULL,
+	[bank_id] [bigint] NULL,
+	[customer_id] [bigint] NULL,
+	[type] [int] NULL,
+	[accountCurrency] [varchar](255) NULL,
+	[migrated] [bit] NULL,
+	[transactionType] [varchar](30) NULL,
+	[bankBranch_id] [bigint] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[TransferBeneficiaries]  WITH CHECK ADD FOREIGN KEY([bankBranch_id])
+REFERENCES [dbo].[BankBranches] ([id])
+GO
+
+ALTER TABLE [dbo].[TransferBeneficiaries]  WITH CHECK ADD  CONSTRAINT [FKa654kkm84kv1027sn5uqo9uff] FOREIGN KEY([customer_id])
+REFERENCES [dbo].[Users] ([id])
+GO
+
+ALTER TABLE [dbo].[TransferBeneficiaries] CHECK CONSTRAINT [FKa654kkm84kv1027sn5uqo9uff]
+GO
+
+ALTER TABLE [dbo].[TransferBeneficiaries]  WITH CHECK ADD  CONSTRAINT [FKhsaqp8e5r9mv8ibk1ovexdbyf] FOREIGN KEY([bank_id])
+REFERENCES [dbo].[Banks] ([id])
+GO
+
+ALTER TABLE [dbo].[TransferBeneficiaries] CHECK CONSTRAINT [FKhsaqp8e5r9mv8ibk1ovexdbyf]
+GO
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+USE [fmb_mobile_banking]
+GO
+
+/****** Object:  Table [dbo].[PaymentBeneficiaries]    Script Date: 7/16/2026 5:20:24 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[PaymentBeneficiaries](
+	[id] [bigint] IDENTITY(1,1) NOT NULL,
+	[additionalParams] [varchar](3600) NULL,
+	[checksum] [varchar](255) NULL,
+	[customerReferece] [varchar](255) NOT NULL,
+	[description] [varchar](255) NULL,
+	[sourceAccount] [varchar](255) NULL,
+	[biller_id] [bigint] NULL,
+	[customer_id] [bigint] NULL,
+	[product_id] [bigint] NULL,
+	[quickPay] [bit] NOT NULL,
+	[createDate] [datetime2](7) NULL,
+	[destinationAccountNumber] [varchar](50) NULL,
+	[destinationAccountName] [varchar](50) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[PaymentBeneficiaries]  WITH CHECK ADD  CONSTRAINT [FKc9ph48biin72yfhhep7ae84fv] FOREIGN KEY([biller_id])
+REFERENCES [dbo].[Billers] ([id])
+GO
+
+ALTER TABLE [dbo].[PaymentBeneficiaries] CHECK CONSTRAINT [FKc9ph48biin72yfhhep7ae84fv]
+GO
+
+ALTER TABLE [dbo].[PaymentBeneficiaries]  WITH CHECK ADD  CONSTRAINT [FKdrjdedtbov1lec0n2hmft37rs] FOREIGN KEY([product_id])
+REFERENCES [dbo].[Products] ([id])
+GO
+
+ALTER TABLE [dbo].[PaymentBeneficiaries] CHECK CONSTRAINT [FKdrjdedtbov1lec0n2hmft37rs]
+GO
+
+ALTER TABLE [dbo].[PaymentBeneficiaries]  WITH CHECK ADD  CONSTRAINT [FKqtycg4efanwwihlwv2ew0mywx] FOREIGN KEY([customer_id])
+REFERENCES [dbo].[Users] ([id])
+GO
+
+ALTER TABLE [dbo].[PaymentBeneficiaries] CHECK CONSTRAINT [FKqtycg4efanwwihlwv2ew0mywx]
+GO
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+USE [fmb_mobile_banking]
+GO
+
+/****** Object:  Table [dbo].[Devices]    Script Date: 7/16/2026 5:21:47 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Devices](
+	[id] [bigint] IDENTITY(1,1) NOT NULL,
+	[active] [bit] NOT NULL,
+	[deviceModel] [varchar](255) NULL,
+	[deviceState] [int] NULL,
+	[latitude] [varchar](255) NULL,
+	[longitude] [varchar](255) NULL,
+	[nickname] [varchar](255) NULL,
+	[registrationCompleted] [datetime2](7) NULL,
+	[registrationStarted] [datetime2](7) NULL,
+	[uuid] [varchar](255) NULL,
+	[customer_id] [bigint] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[Devices]  WITH CHECK ADD  CONSTRAINT [FK66lrhd8xq66df2e4ebn8sv0j6] FOREIGN KEY([customer_id])
+REFERENCES [dbo].[Users] ([id])
+GO
+
+ALTER TABLE [dbo].[Devices] CHECK CONSTRAINT [FK66lrhd8xq66df2e4ebn8sv0j6]
+GO
+
+
