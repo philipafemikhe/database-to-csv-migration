@@ -1,0 +1,54 @@
+# Copy this file to migration.properties (git-ignored) and fill in real values.
+# Run with: java -jar beneficiary-migration.jar --config=migration.properties
+
+# --- Connection (required) ---
+db.url=jdbc:sqlserver://HOST:1433;databaseName=fmb_mobile_banking;encrypt=true;trustServerCertificate=false
+db.username=
+db.password=
+
+# --- Output ---
+# Where the merged beneficiary_details.csv is written. A sibling <name>.warnings.log is
+# written alongside it listing any rows that couldn't be fully resolved (missing bank_id,
+# unrecognized transactionType, Botswana EFT rows with no valid branch, etc).
+output=beneficiary_details_migrated.csv
+
+# Where customer_info.csv (from dbo.Users) is written, with its own sibling warnings.log.
+output.customerInfo=customer_info_migrated.csv
+
+# beneficiary_id values from PaymentBeneficiaries are offset by this amount so they can't
+# collide with TransferBeneficiaries ids in the merged output.
+payment.id.offset=900000000
+
+# Uncomment to cap rows read per source table, e.g. for a dry run against a test DB.
+# row.limit=100
+
+# --- Source table names (override only if your schema differs from Migration_TableScripts.txt) ---
+# users.table=dbo.Users
+# transferBeneficiaries.table=dbo.TransferBeneficiaries
+# paymentBeneficiaries.table=dbo.PaymentBeneficiaries
+# bankBranches.table=dbo.BankBranches
+# devices.table=dbo.Devices
+
+# --- Banks table ---
+# Defaults below match the confirmed schema: id, code, deleted, enabled, gatewayCode, name,
+# processor, country_id, routingNumber, bankIBRefNumber, branchCode, hasBranches,
+# allowsInstantTransfer, institution, shortName. There's no dedicated swiftCode column -
+# gatewayCode holds the SWIFT/BIC-format value (e.g. "FMERMWMW", "BKIDBWGX"). institution is
+# exactly 'BANK' or 'WALLET'; wallets only occur for Zambia banks. Run --describe-schema first
+# if you're not sure your environment matches, and adjust these if it doesn't.
+banks.table=dbo.Banks
+banks.column.id=id
+banks.column.name=name
+banks.column.swiftCode=gatewayCode
+banks.column.institution=institution
+# Any institution value containing this text (case-insensitive) is treated as a wallet.
+banks.wallet.marker=WALLET
+
+# --- CountryPartner table ---
+# Used both to detect Zambia/Botswana for the country-specific beneficiary rules (wallet
+# clubbing, Botswana EFT branch lookup) and as the actual customer_info.country_code value, so
+# this must resolve to a short code (e.g. "BW", "ZW"), not the full country name. Defaults to a
+# "code" column; run --describe-schema to confirm the real column name and adjust if needed.
+countryPartner.table=dbo.CountryPartner
+countryPartner.column.id=id
+countryPartner.column.name=code
