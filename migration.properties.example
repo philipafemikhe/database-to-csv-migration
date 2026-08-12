@@ -15,6 +15,9 @@ output=beneficiary_details_migrated.csv
 # Where customer_info.csv (from dbo.Users) is written, with its own sibling warnings.log.
 output.customerInfo=customer_info_migrated.csv
 
+# Where transaction.csv (from dbo.Transactions) is written, with its own sibling warnings.log.
+output.transactions=transaction_migrated.csv
+
 # beneficiary_id values from PaymentBeneficiaries are offset by this amount so they can't
 # collide with TransferBeneficiaries ids in the merged output.
 payment.id.offset=900000000
@@ -28,27 +31,51 @@ payment.id.offset=900000000
 # paymentBeneficiaries.table=dbo.PaymentBeneficiaries
 # bankBranches.table=dbo.BankBranches
 # devices.table=dbo.Devices
+# transactions.table=dbo.Transactions
 
 # --- Banks table ---
 # Defaults below match the confirmed schema: id, code, deleted, enabled, gatewayCode, name,
 # processor, country_id, routingNumber, bankIBRefNumber, branchCode, hasBranches,
 # allowsInstantTransfer, institution, shortName. There's no dedicated swiftCode column -
 # gatewayCode holds the SWIFT/BIC-format value (e.g. "FMERMWMW", "BKIDBWGX"). institution is
-# exactly 'BANK' or 'WALLET'; wallets only occur for Zambia banks. Run --describe-schema first
-# if you're not sure your environment matches, and adjust these if it doesn't.
+# exactly 'BANK' or 'WALLET'; wallets only occur for Zambia banks. allowsInstantTransfer also
+# drives the transaction dtype rules (Malawi/Zambia InterBankTransfer) and the beneficiary_type/
+# wallet_type/bank_gateway_code rules. code (separate from gatewayCode) feeds wallet_type and
+# bank_gateway_code for INSTANT rows. Run --describe-schema first if you're not sure your
+# environment matches, and adjust these if it doesn't.
 banks.table=dbo.Banks
 banks.column.id=id
 banks.column.name=name
 banks.column.swiftCode=gatewayCode
 banks.column.institution=institution
+banks.column.allowInstantTransfer=allowsInstantTransfer
+banks.column.code=code
 # Any institution value containing this text (case-insensitive) is treated as a wallet.
 banks.wallet.marker=WALLET
 
+# --- Billers table ---
+# Schema isn't documented either; only biller_id -> gatewayCode is needed, to decide a handful of
+# transaction dtype rules (Malawi/Botswana BillPayment). Run --describe-schema to confirm the real
+# column names and adjust if needed.
+billers.table=dbo.Billers
+billers.column.id=id
+billers.column.gatewayCode=gatewayCode
+
+# --- Products table ---
+# Schema isn't documented either; only product_id -> gatewayCode is needed, to decide the Malawi
+# AirtimePurchase dtype rule (note: AirtimePurchase keys off product_id/Products, not
+# biller_id/Billers, unlike BillPayment). Run --describe-schema to confirm the real column names
+# and adjust if needed.
+products.table=dbo.Products
+products.column.id=id
+products.column.gatewayCode=gatewayCode
+
 # --- CountryPartner table ---
-# Used both to detect Zambia/Botswana for the country-specific beneficiary rules (wallet
-# clubbing, Botswana EFT branch lookup) and as the actual customer_info.country_code value, so
-# this must resolve to a short code (e.g. "BW", "ZW"), not the full country name. Defaults to a
-# "code" column; run --describe-schema to confirm the real column name and adjust if needed.
+# Used only for customer_info.country_code / default_country_code, so this must resolve to a
+# short code (e.g. "BW", "ZW"), not the full country name. Defaults to a "code" column; run
+# --describe-schema to confirm the real column name and adjust if needed. (Not used for
+# beneficiary_details or transaction.country_code anymore - those go through a fixed 1-4 table
+# instead, see the README's Mapping notes.)
 countryPartner.table=dbo.CountryPartner
 countryPartner.column.id=id
 countryPartner.column.name=code

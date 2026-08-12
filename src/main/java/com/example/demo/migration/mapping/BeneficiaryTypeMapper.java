@@ -1,30 +1,36 @@
 package com.example.demo.migration.mapping;
 
+import com.example.demo.migration.model.BankRecord;
+
 import java.util.Locale;
 
 /**
- * TransferBeneficiaries.transactionType -> beneficiary_details.beneficiary_type
+ * TransferBeneficiaries.transactionType -> beneficiary_details.beneficiary_type, per
+ * TransferBeneficaries_Migration_Logic.xlsx.
  *
  *   LOCAL   -> WIB
- *   RTGS    -> OBR
+ *   RTGS    -> OBR (Zambia included - the doc's "Exception - Zambia" note under RTGS just
+ *              re-affirms OBR for a BANK-institution/allowInstantTransfer=1 bank, it doesn't
+ *              override the result)
  *   EFT     -> OBE
- *   INSTANT -> OBI, except in Zambia where a wallet-institution bank maps to IWL
- *              (Zambia clubs wallets and instant transfers under the same old transactionType).
+ *   INSTANT -> OBI, except in Zambia where a wallet-institution bank with allowInstantTransfer=1
+ *              maps to IWL instead (both conditions required - wallet alone isn't enough).
  */
 public final class BeneficiaryTypeMapper {
 
 	private BeneficiaryTypeMapper() {
 	}
 
-	public static String map(String oldTransactionType, boolean countryIsZambia, boolean bankIsWallet) {
+	public static String map(String oldTransactionType, boolean countryIsZambia, BankRecord bank) {
 		if (oldTransactionType == null) {
 			return null;
 		}
+		boolean zambiaInstantWallet = countryIsZambia && bank != null && bank.wallet() && Boolean.TRUE.equals(bank.allowInstantTransfer());
 		return switch (oldTransactionType.trim().toUpperCase(Locale.ROOT)) {
 			case "LOCAL" -> "WIB";
 			case "RTGS" -> "OBR";
 			case "EFT" -> "OBE";
-			case "INSTANT" -> (countryIsZambia && bankIsWallet) ? "IWL" : "OBI";
+			case "INSTANT" -> zambiaInstantWallet ? "IWL" : "OBI";
 			default -> null;
 		};
 	}

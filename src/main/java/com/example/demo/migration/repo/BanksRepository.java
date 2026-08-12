@@ -39,6 +39,9 @@ public final class BanksRepository {
 			String nameCol = JdbcUtils.resolveColumn(columns, config.banksColumnName(), "name", "bankName");
 			String swiftCol = JdbcUtils.resolveColumn(columns, config.banksColumnSwiftCode(), "gatewayCode", "routingNumber", "swiftCode", "swift_code", "swift");
 			String institutionCol = JdbcUtils.resolveColumn(columns, config.banksColumnInstitution(), "institution", "type", "institutionType");
+			String allowInstantTransferCol = JdbcUtils.resolveColumn(columns, config.banksColumnAllowInstantTransfer(),
+					"allowsInstantTransfer", "allowInstantTransfer", "instantTransferAllowed");
+			String codeCol = JdbcUtils.resolveColumn(columns, config.banksColumnCode(), "code", "bankCode");
 
 			if (idCol == null) {
 				log.warn("Banks table '{}' has no resolvable id column; bank_name/swift_code/wallet_type will be left blank for all rows. Columns found: {}",
@@ -46,8 +49,8 @@ public final class BanksRepository {
 				repo.available = false;
 				return repo;
 			}
-			log.info("Banks table '{}' resolved columns: id={}, name={}, swiftCode={}, institution={}",
-					config.banksTable(), idCol, nameCol, swiftCol, institutionCol);
+			log.info("Banks table '{}' resolved columns: id={}, name={}, swiftCode={}, institution={}, allowInstantTransfer={}, code={}",
+					config.banksTable(), idCol, nameCol, swiftCol, institutionCol, allowInstantTransferCol, codeCol);
 
 			while (rs.next()) {
 				long id = rs.getLong(idCol);
@@ -55,7 +58,9 @@ public final class BanksRepository {
 				String swift = swiftCol == null ? null : JdbcUtils.getString(rs, swiftCol);
 				String institution = institutionCol == null ? null : JdbcUtils.getString(rs, institutionCol);
 				boolean wallet = institution != null && institution.toUpperCase().contains(config.banksWalletMarker().toUpperCase());
-				repo.byId.put(id, new BankRecord(id, name, swift, wallet));
+				Boolean allowInstantTransfer = allowInstantTransferCol == null ? null : JdbcUtils.getBoolean(rs, allowInstantTransferCol);
+				String code = codeCol == null ? null : JdbcUtils.getString(rs, codeCol);
+				repo.byId.put(id, new BankRecord(id, name, swift, wallet, allowInstantTransfer, code));
 			}
 		} catch (SQLException e) {
 			log.warn("Could not read Banks table '{}' ({}); bank_name/swift_code/wallet_type will be left blank for all rows.",

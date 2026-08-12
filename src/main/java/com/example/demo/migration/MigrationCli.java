@@ -18,6 +18,7 @@ import java.sql.Connection;
  * Migrates the old SQL Server schema into the new-model CSVs:
  *   - dbo.TransferBeneficiaries + dbo.PaymentBeneficiaries -> beneficiary_details.csv
  *   - dbo.Users -> customer_info.csv
+ *   - dbo.Transactions -> transaction.csv
  *
  * Usage:
  *   java -jar beneficiary-migration.jar --config=migration.properties [options]
@@ -47,13 +48,14 @@ public final class MigrationCli {
 			MigrationConfig config = MigrationConfig.load(Path.of(options.configPath().get()));
 			options.output().ifPresent(v -> config.override("output", v));
 			options.outputCustomers().ifPresent(v -> config.override("output.customerInfo", v));
+			options.outputTransactions().ifPresent(v -> config.override("output.transactions", v));
 			options.limit().ifPresent(v -> config.override("row.limit", v));
 
 			try (Connection connection = ConnectionFactory.open(config)) {
 				if (options.describeSchema()) {
 					SchemaInspector.describe(connection, config);
 				} else {
-					new MigrationRunner(connection, config).run(!options.skipBeneficiaries(), !options.skipCustomers());
+					new MigrationRunner(connection, config).run(!options.skipBeneficiaries(), !options.skipCustomers(), !options.skipTransactions());
 				}
 			}
 			log.info("Done in {} ms", System.currentTimeMillis() - start);
@@ -73,12 +75,15 @@ public final class MigrationCli {
 				                         See migration.properties.example for the full list.
 				  --output               Overrides 'output': where to write beneficiary_details.csv.
 				  --output-customers      Overrides 'output.customerInfo': where to write customer_info.csv.
+				  --output-transactions   Overrides 'output.transactions': where to write transaction.csv.
 				  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).
 				  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.
 				  --skip-customers        Don't migrate Users this run.
-				  --describe-schema       Prints the columns found in the Banks and CountryPartner tables, then exits,
-				                         without running the migration. Use this first to confirm/adjust the
-				                         banks.column.* and countryPartner.column.* overrides in your config file.
+				  --skip-transactions     Don't migrate Transactions this run.
+				  --describe-schema       Prints the columns found in the Banks, CountryPartner, and Billers tables, then
+				                         exits, without running the migration. Use this first to confirm/adjust the
+				                         banks.column.*, countryPartner.column.*, and billers.column.* overrides in
+				                         your config file.
 				""");
 	}
 }

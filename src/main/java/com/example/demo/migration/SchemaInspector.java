@@ -10,9 +10,10 @@ import java.util.List;
 
 /**
  * Backs {@code --describe-schema}: prints the actual columns (and a few sample rows) of the
- * Banks and CountryPartner tables, whose exact schema wasn't available while building this tool.
- * Run this against a real environment before a live migration to confirm/adjust the
- * banks.column.* and countryPartner.column.* overrides in the config file.
+ * Banks, CountryPartner, Billers, and Products tables, whose exact schema wasn't available while
+ * building this tool. Run this against a real environment before a live migration to
+ * confirm/adjust the banks.column.*, countryPartner.column.*, billers.column.*, and
+ * products.column.* overrides in the config file.
  *
  * This writes directly to stdout rather than through the logger: it's a one-shot diagnostic
  * report for a human to read, not a progress/event log.
@@ -27,6 +28,8 @@ public final class SchemaInspector {
 	public static void describe(Connection connection, MigrationConfig config) throws Exception {
 		describeTable(connection, "Banks", config.banksTable());
 		describeTable(connection, "CountryPartner", config.countryPartnerTable());
+		describeTable(connection, "Billers", config.billersTable());
+		describeTable(connection, "Products", config.productsTable());
 	}
 
 	private static void describeTable(Connection connection, String label, String table) throws Exception {

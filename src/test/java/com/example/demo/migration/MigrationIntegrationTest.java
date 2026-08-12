@@ -4,13 +4,17 @@ import com.example.demo.migration.csv.CsvWriter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.BeneficiaryDetailsSchema;
 import com.example.demo.migration.mapping.CustomerInfoSchema;
+import com.example.demo.migration.mapping.TransactionSchema;
 import com.example.demo.migration.repo.BankBranchesRepository;
 import com.example.demo.migration.repo.BanksRepository;
+import com.example.demo.migration.repo.BillersRepository;
 import com.example.demo.migration.repo.CountryPartnerRepository;
 import com.example.demo.migration.repo.DevicesRepository;
+import com.example.demo.migration.repo.ProductsRepository;
 import com.example.demo.migration.repo.UsersRepository;
 import com.example.demo.migration.source.CustomerInfoSource;
 import com.example.demo.migration.source.PaymentBeneficiarySource;
+import com.example.demo.migration.source.TransactionSource;
 import com.example.demo.migration.source.TransferBeneficiarySource;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -57,6 +61,8 @@ class MigrationIntegrationTest {
 				banks.column.name=bankName
 				banks.column.swiftCode=swift
 				banks.column.institution=instType
+				banks.column.allowInstantTransfer=instantOk
+				banks.column.code=bcode
 				countryPartner.column.id=countryId
 				countryPartner.column.name=label
 				""".formatted(connection.getMetaData().getURL()), StandardCharsets.UTF_8);
@@ -94,24 +100,47 @@ class MigrationIntegrationTest {
 					  (300, 'R000300', 3, '265994885882', '1125501060384', '2026-06-03 16:01:24.863', NULL, NULL,
 					   'FR', NULL, 'OTP', TRUE, TRUE, TRUE, FALSE, TRUE, FALSE, NULL, NULL, NULL),
 					  (400, 'R000400', 888, '26770000000', NULL, '2026-01-01 00:00:00.000', NULL, NULL, NULL, NULL,
+					   'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL),
+					  (250, 'R000250', 4, '260971111111', NULL, '2026-07-01 00:00:00.000', NULL, NULL, NULL, NULL,
 					   'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL)
 					""");
 
-			st.execute("CREATE TABLE dbo.Banks (bankId BIGINT, bankName VARCHAR(100), swift VARCHAR(20), instType VARCHAR(20))");
+			st.execute("CREATE TABLE dbo.Banks (bankId BIGINT, bankName VARCHAR(100), swift VARCHAR(20), instType VARCHAR(20), instantOk BOOLEAN, bcode VARCHAR(20))");
 			st.execute("""
 					INSERT INTO dbo.Banks VALUES
-					  (88, 'First National Bank Botswana', 'FIRNBWGX', 'BANK'),
-					  (114, 'Airtel Money', NULL, 'WALLET'),
-					  (21, 'Standard Chartered Zambia', 'SCBLZMLX', 'BANK')
+					  (88, 'First National Bank Botswana', 'FIRNBWGX', 'BANK', NULL, 'FNBB'),
+					  (114, 'Airtel Money', NULL, 'WALLET', FALSE, 'ZM-AIRTEL'),
+					  (115, 'Zamtel Wallet', NULL, 'WALLET', TRUE, 'ZM-ZAMTEL'),
+					  (21, 'Standard Chartered Zambia', 'SCBLZMLX', 'BANK', TRUE, 'SCBZM'),
+					  (22, 'Zambia National Commercial Bank', 'ZNCOZMLX', 'BANK', FALSE, 'ZNCO'),
+					  (200, 'Malawi Instant Bank', 'MWIXXXXX', 'BANK', TRUE, 'MWINSTANT'),
+					  (201, 'Malawi Standard Bank', 'MWSTXXXX', 'BANK', FALSE, 'MWSTD')
 					""");
 
-			st.execute("CREATE TABLE dbo.BankBranches (id BIGINT, name VARCHAR(100), bank_id BIGINT, code VARCHAR(20))");
+			st.execute("CREATE TABLE dbo.Billers (id BIGINT, gatewayCode VARCHAR(50))");
+			st.execute("""
+					INSERT INTO dbo.Billers VALUES
+					  (10, 'Simpo Cash'),
+					  (11, 'Random Biller'),
+					  (12, 'Orange-B2C'),
+					  (13, 'Other BW Biller')
+					""");
+
+			st.execute("CREATE TABLE dbo.Products (id BIGINT, gatewayCode VARCHAR(50))");
+			st.execute("""
+					INSERT INTO dbo.Products VALUES
+					  (14, 'TNMAIR'),
+					  (15, 'AIRB2W'),
+					  (16, 'UNKNOWNCODE')
+					""");
+
+			st.execute("CREATE TABLE dbo.BankBranches (id BIGINT, name VARCHAR(100), bank_id BIGINT, code VARCHAR(20), gatewayCode VARCHAR(20))");
 			st.execute("""
 					INSERT INTO dbo.BankBranches VALUES
-					  (27, 'FRANCISTOWN(2917)', 88, 'B027'),
-					  (99, 'SOME OTHER BRANCH', 999, 'B099'),
-					  (500, 'PURE DIGIT CODE BRANCH', 88, '004'),
-					  (501, 'LETTER PREFIX CODE BRANCH', 88, 'B112')
+					  (27, 'FRANCISTOWN(2917)', 88, 'B027', '2917'),
+					  (99, 'SOME OTHER BRANCH', 999, 'B099', '9901'),
+					  (500, 'PURE DIGIT CODE BRANCH', 88, '004', '5001'),
+					  (501, 'LETTER PREFIX CODE BRANCH', 88, 'B112', '5011')
 					""");
 
 			st.execute("""
@@ -133,15 +162,18 @@ class MigrationIntegrationTest {
 					)""");
 			st.execute("""
 					INSERT INTO dbo.TransferBeneficiaries VALUES
-					  (1, 'Cable Masters', '1810264', 88, 100, 'BWP', 'EFT', 27),
-					  (2, 'Mismatch Case', '555', 88, 100, 'BWP', 'EFT', 99),
-					  (3, 'No Branch Case', '777', 88, 100, 'BWP', 'EFT', NULL),
-					  (4, 'Zambia Wallet Guy', '111', 114, 200, 'ZMW', 'INSTANT', NULL),
-					  (5, 'Zambia NonWallet Guy', '222', 21, 200, 'ZMW', 'INSTANT', NULL),
-					  (6, 'Malawi Local Guy', '333', NULL, 300, 'MWK', 'LOCAL', NULL),
-					  (7, 'RTGS Guy', '444', 88, 300, 'MWK', 'RTGS', NULL),
-					  (8, 'Unknown Type', '555', 88, 300, 'MWK', 'WEIRD', NULL),
-					  (9, 'Unresolved Customer', '666', 88, 999, 'MWK', 'LOCAL', NULL)
+					  (1, 'Cable Masters', '1810264', 88, 200, 'BWP', 'EFT', 27),
+					  (2, 'Mismatch Case', '555', 88, 200, 'BWP', 'EFT', 99),
+					  (3, 'No Branch Case', '777', 88, 200, 'BWP', 'EFT', NULL),
+					  (4, 'Zambia Wallet Instant Guy', '111', 115, 250, 'ZMW', 'INSTANT', NULL),
+					  (5, 'Zambia Wallet NoFlag Guy', '112', 114, 250, 'ZMW', 'INSTANT', NULL),
+					  (6, 'Zambia NonWallet Instant Guy', '222', 21, 250, 'ZMW', 'INSTANT', NULL),
+					  (7, 'Zambia RTGS Guy', '333', 21, 250, 'ZMW', 'RTGS', NULL),
+					  (8, 'Malawi RTGS Guy', '444', 88, 100, 'MWK', 'RTGS', NULL),
+					  (9, 'Malawi Instant Guy', '555', 200, 100, 'MWK', 'INSTANT', NULL),
+					  (10, 'Malawi Local Guy', '666', NULL, 100, 'MWK', 'LOCAL', NULL),
+					  (11, 'Unknown Type', '777', 88, 300, 'MWK', 'WEIRD', NULL),
+					  (12, 'Unresolved Customer', '888', 88, 999, 'MWK', 'LOCAL', NULL)
 					""");
 
 			st.execute("""
@@ -157,6 +189,48 @@ class MigrationIntegrationTest {
 					   300, 6, TRUE, '2026-03-23 08:57:08.711', '8888', 'Override Name'),
 					  (502, 'not-json', 999, 7, FALSE, '2026-01-01 00:00:00.000', NULL, NULL)
 					""");
+
+			st.execute("""
+					CREATE TABLE dbo.Transactions (
+					  DTYPE VARCHAR(30), id BIGINT, amount NUMERIC(19,2), charge NUMERIC(19,2), bankReference VARCHAR(255),
+					  deviceUUID VARCHAR(255), narration VARCHAR(255), sourceAccount VARCHAR(255), status VARCHAR(255),
+					  statusCode VARCHAR(255), statusDescription VARCHAR(255), transactionDate TIMESTAMP,
+					  destinationAccount VARCHAR(255), transferProcessor VARCHAR(255), customerReference VARCHAR(255),
+					  finalResponseCode VARCHAR(255), gatewayReference VARCHAR(255), initialResponseCode VARCHAR(255),
+					  customer_id BIGINT, destinationBank_id BIGINT, biller_id BIGINT, product_id BIGINT,
+					  phoneNumber VARCHAR(255), country_id BIGINT, receiptNo VARCHAR(255), tokens VARCHAR(255),
+					  destinationAccountName VARCHAR(255), channel VARCHAR(255), user_id BIGINT, sourceAccountCurrency VARCHAR(50)
+					)""");
+			st.execute("""
+					INSERT INTO dbo.Transactions
+					  (DTYPE, id, amount, charge, customer_id, destinationBank_id, biller_id, product_id, country_id, user_id, sourceAccountCurrency)
+					VALUES
+					  ('LocalTransfer', 9001, 100.50, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),
+					  ('BillPayment', 9002, 500, 0, 100, NULL, 10, NULL, 1, 100, 'MWK'),
+					  ('BillPayment', 9003, 500, 0, 100, NULL, 11, NULL, 1, 100, 'MWK'),
+					  ('BillPayment', 9004, 500, 0, 100, NULL, 12, NULL, 2, 100, 'BWP'),
+					  ('BillPayment', 9005, 500, 0, 100, NULL, 13, NULL, 2, 100, 'BWP'),
+					  ('BillPayment', 9006, 500, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),
+					  ('BillPayment', 9007, 500, 0, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),
+					  ('AirtimePurchase', 9008, 100, NULL, 100, NULL, NULL, 14, 1, 100, 'MWK'),
+					  ('AirtimePurchase', 9009, 100, NULL, 100, NULL, NULL, 15, 1, 100, 'MWK'),
+					  ('AirtimePurchase', 9010, 100, NULL, 100, NULL, NULL, 16, 1, 100, 'MWK'),
+					  ('AirtimePurchase', 9011, 100, NULL, 100, NULL, NULL, NULL, 2, 100, 'BWP'),
+					  ('AirtimePurchase', 9012, 100, NULL, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),
+					  ('AirtimePurchase', 9013, 100, NULL, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),
+					  ('InterBankTransfer', 9014, 1000, 0, 100, 200, NULL, NULL, 1, 100, 'MWK'),
+					  ('InterBankTransfer', 9015, 1000, 0, 100, 201, NULL, NULL, 1, 100, 'MWK'),
+					  ('InterBankTransfer', 9016, 1000, 0, 100, 88, NULL, NULL, 2, 100, 'BWP'),
+					  ('InterBankTransfer', 9017, 1000, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),
+					  ('InterBankTransfer', 9018, 1000, 0, 100, 88, NULL, NULL, 3, 100, 'ZWG'),
+					  ('InterBankTransfer', 9019, 1000, 0, 100, 114, NULL, NULL, 4, 100, 'ZMW'),
+					  ('InterBankTransfer', 9020, 1000, 0, 100, 21, NULL, NULL, 4, 100, 'ZMW'),
+					  ('InterBankTransfer', 9021, 1000, 0, 100, 22, NULL, NULL, 4, 100, 'ZMW'),
+					  ('WeirdType', 9022, 1000, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),
+					  ('LocalTransfer', 9023, 100, 0, 999, NULL, NULL, NULL, 1, 100, 'MWK'),
+					  ('LocalTransfer', 9024, 100, 0, 100, NULL, NULL, NULL, 99, 100, 'MWK'),
+					  ('InterBankTransfer', 9025, 1000, 0, 100, 987654, NULL, NULL, 1, 100, 'MWK')
+					""");
 		}
 	}
 
@@ -165,12 +239,9 @@ class MigrationIntegrationTest {
 		UsersRepository users = UsersRepository.load(connection, config.usersTable());
 		BanksRepository banks = BanksRepository.load(connection, config);
 		BankBranchesRepository branches = BankBranchesRepository.load(connection, config.bankBranchesTable());
-		CountryPartnerRepository countries = CountryPartnerRepository.load(connection, config);
 
 		assertTrue(banks.isAvailable());
-		assertTrue(countries.isAvailable());
-		assertEquals(3, banks.size());
-		assertEquals(3, countries.size());
+		assertEquals(7, banks.size());
 
 		WarningCollector transferWarnings = new WarningCollector("TransferBeneficiaries");
 		WarningCollector paymentWarnings = new WarningCollector("PaymentBeneficiaries");
@@ -179,69 +250,104 @@ class MigrationIntegrationTest {
 		int transferCount;
 		int paymentCount;
 		try (CsvWriter writer = new CsvWriter(outputPath, BeneficiaryDetailsSchema.HEADER)) {
-			transferCount = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, countries, writer, "2026-07-20 10:00:00.000", transferWarnings);
-			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, countries, writer, paymentWarnings);
+			transferCount = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, "2026-07-20 10:00:00.000", transferWarnings);
+			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, writer, paymentWarnings);
 		}
 
-		assertEquals(9, transferCount);
+		assertEquals(12, transferCount);
 		assertEquals(3, paymentCount);
 
 		Map<String, CSVRecord> byId = readCsvById(outputPath, BeneficiaryDetailsSchema.HEADER, "beneficiary_id");
-		assertEquals(12, byId.size());
+		assertEquals(15, byId.size());
 
-		// Botswana EFT, valid branch match.
+		// Botswana EFT, valid branch match. customer_country_code now comes from the fixed
+		// IswCountry table (country_id=2 -> BW), not the dynamic CountryPartner lookup.
 		CSVRecord r1 = byId.get("1");
-		assertEquals("R000100", r1.get("customer_id"));
-		assertEquals("Botswana", r1.get("customer_country_code"));
+		assertEquals("R000200", r1.get("customer_id"));
+		assertEquals("BW", r1.get("customer_country_code"));
 		assertEquals("OBE", r1.get("beneficiary_type"));
 		assertEquals("First National Bank Botswana", r1.get("bank_name"));
 		assertEquals("FIRNBWGX", r1.get("swift_code"));
 		assertEquals("FRANCISTOWN(2917)", r1.get("branch_name"));
 		assertEquals("true", r1.get("has_branches"));
-		assertEquals("27", r1.get("branch_code"));
+		assertEquals("2917", r1.get("branch_code"));
+		assertEquals("", r1.get("bank_gateway_code"));
 		assertEquals("true", r1.get("is_active"));
 		assertEquals("false", r1.get("is_deleted"));
 		assertEquals("2026-07-20 10:00:00.000", r1.get("created_at"));
 
-		// Botswana EFT, branch belongs to a different bank -> validation failure, blank branch_name.
+		// Botswana EFT, branch belongs to a different bank -> validation failure, blank
+		// branch_name, but branch_code is still resolved (it's independent of that validation).
 		CSVRecord r2 = byId.get("2");
 		assertEquals("", r2.get("branch_name"));
 		assertEquals("false", r2.get("has_branches"));
-		assertEquals("99", r2.get("branch_code"));
+		assertEquals("9901", r2.get("branch_code"));
 
 		// Botswana EFT, no bankBranch_id at all.
 		CSVRecord r3 = byId.get("3");
 		assertEquals("", r3.get("branch_name"));
 		assertEquals("", r3.get("branch_code"));
 
-		// Zambia INSTANT + wallet bank -> IWL, wallet_type populated.
+		// Zambia INSTANT + wallet bank + allowInstantTransfer=1 -> IWL, wallet_type AND
+		// bank_gateway_code both populated from Banks.code (not Banks.name anymore).
 		CSVRecord r4 = byId.get("4");
 		assertEquals("IWL", r4.get("beneficiary_type"));
-		assertEquals("Airtel Money", r4.get("wallet_type"));
-		assertEquals("Airtel Money", r4.get("bank_name"));
+		assertEquals("ZM-ZAMTEL", r4.get("wallet_type"));
+		assertEquals("ZM-ZAMTEL", r4.get("bank_gateway_code"));
+		assertEquals("Zamtel Wallet", r4.get("bank_name"));
 
-		// Zambia INSTANT + non-wallet bank -> OBI, no wallet_type.
+		// Zambia INSTANT + wallet bank but allowInstantTransfer=0 -> the "AND" now fails, so this
+		// is OBI (not IWL) with wallet_type blank; bank_gateway_code is still populated (it only
+		// depends on the row being INSTANT, not on the wallet exception outcome).
 		CSVRecord r5 = byId.get("5");
 		assertEquals("OBI", r5.get("beneficiary_type"));
 		assertEquals("", r5.get("wallet_type"));
+		assertEquals("ZM-AIRTEL", r5.get("bank_gateway_code"));
 
-		// LOCAL / RTGS plain mapping.
-		assertEquals("WIB", byId.get("6").get("beneficiary_type"));
-		assertEquals("OBR", byId.get("7").get("beneficiary_type"));
+		// Zambia INSTANT + non-wallet bank -> OBI, no wallet_type, bank_gateway_code from Banks.code.
+		CSVRecord r6 = byId.get("6");
+		assertEquals("OBI", r6.get("beneficiary_type"));
+		assertEquals("", r6.get("wallet_type"));
+		assertEquals("SCBZM", r6.get("bank_gateway_code"));
+
+		// Zambia RTGS against a BANK with allowInstantTransfer=1 -> still OBR (the doc's "Exception
+		// - Zambia" note under RTGS just re-affirms OBR here, it doesn't override to a different
+		// code); bank_gateway_code comes from Banks.swiftCode (the gatewayCode column) for RTGS.
+		CSVRecord r7 = byId.get("7");
+		assertEquals("OBR", r7.get("beneficiary_type"));
+		assertEquals("SCBLZMLX", r7.get("bank_gateway_code"));
+
+		// Malawi RTGS -> OBR, bank_gateway_code from Banks.swiftCode.
+		CSVRecord r8 = byId.get("8");
+		assertEquals("MW", r8.get("customer_country_code"));
+		assertEquals("OBR", r8.get("beneficiary_type"));
+		assertEquals("FIRNBWGX", r8.get("bank_gateway_code"));
+
+		// Malawi INSTANT -> OBI (no Zambia-only wallet exception applies), bank_gateway_code from Banks.code.
+		CSVRecord r9 = byId.get("9");
+		assertEquals("OBI", r9.get("beneficiary_type"));
+		assertEquals("MWINSTANT", r9.get("bank_gateway_code"));
+
+		// LOCAL -> WIB, no bank_gateway_code.
+		CSVRecord r10 = byId.get("10");
+		assertEquals("WIB", r10.get("beneficiary_type"));
+		assertEquals("", r10.get("bank_gateway_code"));
 
 		// Unrecognized transactionType -> blank.
-		assertEquals("", byId.get("8").get("beneficiary_type"));
+		assertEquals("", byId.get("11").get("beneficiary_type"));
 
 		// Unresolved customer_id -> blank customer fields.
-		CSVRecord r9 = byId.get("9");
-		assertEquals("", r9.get("customer_id"));
-		assertEquals("", r9.get("customer_country_code"));
+		CSVRecord r12 = byId.get("12");
+		assertEquals("", r12.get("customer_id"));
+		assertEquals("", r12.get("customer_country_code"));
 
-		// PaymentBeneficiaries: JSON-derived fields, offset id.
+		// PaymentBeneficiaries: JSON-derived fields, offset id. customer_country_code now comes
+		// from the fixed IswCountry table too (customer 300's country_id=3 -> ZW), for consistency
+		// with TransferBeneficiaries' rows in this same merged file.
 		long offset = config.paymentBeneficiaryIdOffset();
 		CSVRecord p1 = byId.get(String.valueOf(500 + offset));
 		assertEquals("R0498292", p1.get("customer_id"));
-		assertEquals("Malawi", p1.get("customer_country_code"));
+		assertEquals("ZW", p1.get("customer_country_code"));
 		assertEquals("EMMANUEL KALULU", p1.get("beneficiary_name"));
 		assertEquals("0001503165339", p1.get("account_number"));
 		assertEquals("MWK", p1.get("beneficiary_currency"));
@@ -259,7 +365,7 @@ class MigrationIntegrationTest {
 		CSVRecord p3 = byId.get(String.valueOf(502 + offset));
 		assertEquals("", p3.get("customer_id"));
 
-		// TransferBeneficiaries warnings: mismatch(row2), missing branch(row3), unknown type(row8), unresolved customer(row9).
+		// TransferBeneficiaries warnings: mismatch(row2), missing branch(row3), unknown type(row11), unresolved customer(row12).
 		assertEquals(4, transferWarnings.size(), "transfer warnings: " + transferWarnings.all());
 		// PaymentBeneficiaries warnings: invalid json(row502) + unresolved customer fallback(row502).
 		assertEquals(2, paymentWarnings.size(), "payment warnings: " + paymentWarnings.all());
@@ -272,7 +378,7 @@ class MigrationIntegrationTest {
 		DevicesRepository devices = DevicesRepository.load(connection, config.devicesTable());
 		CountryPartnerRepository countries = CountryPartnerRepository.load(connection, config);
 
-		assertEquals(4, users.size());
+		assertEquals(5, users.size());
 		assertEquals(2, devices.size());
 
 		WarningCollector warnings = new WarningCollector("Users");
@@ -282,7 +388,7 @@ class MigrationIntegrationTest {
 		try (CsvWriter writer = new CsvWriter(outputPath, CustomerInfoSchema.HEADER)) {
 			count = CustomerInfoSource.migrate(users, branches, devices, countries, writer, "2026-07-20 10:00:00.000", warnings);
 		}
-		assertEquals(4, count);
+		assertEquals(5, count);
 
 		Map<String, CSVRecord> byId = readCsvById(outputPath, CustomerInfoSchema.HEADER, "id");
 
@@ -337,9 +443,103 @@ class MigrationIntegrationTest {
 		assertEquals("", u400.get("branch_id"));
 		assertEquals("26770000000", u400.get("device_id"));
 
-		// Warnings: unresolved branch(200), unresolved country(400). User 400 has no account
-		// number so no branch warning is raised for it (nothing to derive from).
-		assertEquals(2, warnings.size(), "warnings: " + warnings.all());
+		// User 250: added for the beneficiary_details fixed-country tests; country_id=4 isn't in
+		// this test's CountryPartner table either (only 1-3), so it's unresolved here too - this
+		// mapper is untouched by the fixed IswCountry change, it still uses CountryPartner.
+		CSVRecord u250 = byId.get("250");
+		assertEquals("", u250.get("country_code"));
+		assertEquals("", u250.get("branch_id"));
+
+		// Warnings: unresolved branch(200), unresolved country(400), unresolved country(250).
+		// User 400/250 have no account number so no branch warning is raised for them (nothing to derive from).
+		assertEquals(3, warnings.size(), "warnings: " + warnings.all());
+	}
+
+	@Test
+	void migratesTransactionsWithDTypeRules() throws Exception {
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		BanksRepository banks = BanksRepository.load(connection, config);
+		BillersRepository billers = BillersRepository.load(connection, config);
+		ProductsRepository products = ProductsRepository.load(connection, config);
+
+		assertTrue(billers.isAvailable());
+		assertEquals(4, billers.size());
+		assertTrue(products.isAvailable());
+		assertEquals(3, products.size());
+
+		WarningCollector warnings = new WarningCollector("Transactions");
+		Path outputPath = tempDir.resolve("transaction.csv");
+
+		int count;
+		try (CsvWriter writer = new CsvWriter(outputPath, TransactionSchema.HEADER)) {
+			count = TransactionSource.migrate(connection, config, users, banks, billers, products, writer, warnings);
+		}
+		assertEquals(25, count);
+
+		Map<String, CSVRecord> byId = readCsvById(outputPath, TransactionSchema.HEADER, "id");
+
+		// LocalTransfer -> WIB, unconditionally; customerid resolved via Users.userName.
+		assertEquals("WIB", byId.get("9001").get("dtype"));
+		assertEquals("R000100", byId.get("9001").get("customerid"));
+		assertEquals("MW", byId.get("9001").get("country_code"));
+
+		// BillPayment, Malawi: wallet gateway code -> IWL, everything else -> BILL.
+		assertEquals("IWL", byId.get("9002").get("dtype"));
+		assertEquals("BILL", byId.get("9003").get("dtype"));
+
+		// BillPayment, Botswana: wallet gateway code -> IWL, everything else -> BILL.
+		assertEquals("IWL", byId.get("9004").get("dtype"));
+		assertEquals("BILL", byId.get("9005").get("dtype"));
+
+		// BillPayment, Zimbabwe/Zambia: always BILL regardless of biller.
+		assertEquals("BILL", byId.get("9006").get("dtype"));
+		assertEquals("BILL", byId.get("9007").get("dtype"));
+
+		// AirtimePurchase, Malawi: Products.gatewayCode (not Billers) decides BILL vs IWL; unrecognized code -> blank.
+		assertEquals("BILL", byId.get("9008").get("dtype"));
+		assertEquals("IWL", byId.get("9009").get("dtype"));
+		assertEquals("", byId.get("9010").get("dtype"));
+
+		// AirtimePurchase, Botswana/Zimbabwe/Zambia: always BILL.
+		assertEquals("BILL", byId.get("9011").get("dtype"));
+		assertEquals("BILL", byId.get("9012").get("dtype"));
+		assertEquals("BILL", byId.get("9013").get("dtype"));
+
+		// InterBankTransfer, Malawi: Banks.allowInstantTransfer decides OBI/OBR.
+		assertEquals("OBI", byId.get("9014").get("dtype"));
+		assertEquals("OBR", byId.get("9015").get("dtype"));
+		assertEquals("First National Bank Botswana", byId.get("9016").get("destination_bank_id"));
+
+		// InterBankTransfer, Botswana: always OBE.
+		assertEquals("OBE", byId.get("9016").get("dtype"));
+
+		// InterBankTransfer, Zimbabwe: destinationBank_id NULL -> OBI (ZIPIT), else OBR (RTGS).
+		assertEquals("OBI", byId.get("9017").get("dtype"));
+		assertEquals("OBR", byId.get("9018").get("dtype"));
+
+		// InterBankTransfer, Zambia: wallet bank wins over allowInstantTransfer -> IWL; otherwise the flag decides.
+		assertEquals("IWL", byId.get("9019").get("dtype"));
+		assertEquals("OBI", byId.get("9020").get("dtype"));
+		assertEquals("OBR", byId.get("9021").get("dtype"));
+
+		// Unrecognized DTYPE -> blank dtype.
+		assertEquals("", byId.get("9022").get("dtype"));
+
+		// Unresolved customer_id -> blank customerid, dtype still derived normally.
+		assertEquals("", byId.get("9023").get("customerid"));
+		assertEquals("WIB", byId.get("9023").get("dtype"));
+
+		// Unrecognized country_id -> blank country_code; LocalTransfer's dtype is unconditional so it's unaffected.
+		assertEquals("", byId.get("9024").get("country_code"));
+		assertEquals("WIB", byId.get("9024").get("dtype"));
+
+		// destinationBank_id not found in Banks -> blank destination_bank_id AND blank dtype (two distinct warnings).
+		assertEquals("", byId.get("9025").get("destination_bank_id"));
+		assertEquals("", byId.get("9025").get("dtype"));
+
+		// Warnings: unrecognized airtime gateway code(9010), unrecognized DTYPE(9022), unresolved
+		// customer_id(9023), unrecognized country_id(9024), unresolved destinationBank_id x2(9025).
+		assertEquals(6, warnings.size(), "warnings: " + warnings.all());
 	}
 
 	/**

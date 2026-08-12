@@ -4,7 +4,6 @@ import com.example.demo.migration.WarningCollector;
 import com.example.demo.migration.csv.CsvWriter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.PaymentBeneficiaryMapper;
-import com.example.demo.migration.repo.CountryPartnerRepository;
 import com.example.demo.migration.repo.UsersRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +23,7 @@ public final class PaymentBeneficiarySource {
 	}
 
 	public static int migrate(Connection connection, MigrationConfig config, UsersRepository users,
-			CountryPartnerRepository countries, CsvWriter writer, WarningCollector warnings) throws SQLException, IOException {
+			CsvWriter writer, WarningCollector warnings) throws SQLException, IOException {
 
 		String columns = "id, additionalParams, customer_id, biller_id, quickPay, createDate, destinationAccountNumber, destinationAccountName";
 		Integer limit = config.rowLimit();
@@ -38,7 +37,7 @@ public final class PaymentBeneficiarySource {
 			st.setFetchSize(1000);
 			try (ResultSet rs = st.executeQuery(sql)) {
 				while (rs.next()) {
-					writer.write(PaymentBeneficiaryMapper.mapRow(rs, users, countries, offset, warnings));
+					writer.write(PaymentBeneficiaryMapper.mapRow(rs, users, offset, warnings));
 					count++;
 					if (count % PROGRESS_INTERVAL == 0) {
 						log.info("PaymentBeneficiaries: {} rows migrated so far...", count);

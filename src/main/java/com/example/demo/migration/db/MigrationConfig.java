@@ -12,12 +12,14 @@ import java.util.Properties;
  *
  * Expected properties - see migration.properties.example for the full, documented list:
  *   db.url, db.username, db.password, db.driver
- *   output, output.customerInfo, payment.id.offset, row.limit
+ *   output, output.customerInfo, output.transactions, payment.id.offset, row.limit
  *   users.table, transferBeneficiaries.table, paymentBeneficiaries.table, bankBranches.table,
- *     devices.table
+ *     devices.table, transactions.table
  *   banks.table, banks.column.id, banks.column.name, banks.column.swiftCode,
- *     banks.column.institution, banks.wallet.marker
+ *     banks.column.institution, banks.column.allowInstantTransfer, banks.column.code, banks.wallet.marker
  *   countryPartner.table, countryPartner.column.id, countryPartner.column.name
+ *   billers.table, billers.column.id, billers.column.gatewayCode
+ *   products.table, products.column.id, products.column.gatewayCode
  */
 public final class MigrationConfig {
 
@@ -77,6 +79,10 @@ public final class MigrationConfig {
 		return get("output.customerInfo", "customer_info_migrated.csv");
 	}
 
+	public String transactionsOutputPath() {
+		return get("output.transactions", "transaction_migrated.csv");
+	}
+
 	public long paymentBeneficiaryIdOffset() {
 		return Long.parseLong(get("payment.id.offset", "900000000"));
 	}
@@ -100,6 +106,10 @@ public final class MigrationConfig {
 
 	public String devicesTable() {
 		return get("devices.table", "dbo.Devices");
+	}
+
+	public String transactionsTable() {
+		return get("transactions.table", "dbo.Transactions");
 	}
 
 	public String bankBranchesTable() {
@@ -128,6 +138,14 @@ public final class MigrationConfig {
 		return get("banks.column.institution", "institution");
 	}
 
+	public String banksColumnAllowInstantTransfer() {
+		return get("banks.column.allowInstantTransfer", "allowsInstantTransfer");
+	}
+
+	public String banksColumnCode() {
+		return get("banks.column.code", "code");
+	}
+
 	public String banksWalletMarker() {
 		return get("banks.wallet.marker", "WALLET");
 	}
@@ -144,5 +162,29 @@ public final class MigrationConfig {
 		// customer_info.country_code and beneficiary rules both want a short code (e.g. "BW",
 		// "ZW"), not the full country name - prefer a "code" column over "name".
 		return get("countryPartner.column.name", "code");
+	}
+
+	public String billersTable() {
+		return get("billers.table", "dbo.Billers");
+	}
+
+	public String billersColumnId() {
+		return get("billers.column.id", "id");
+	}
+
+	public String billersColumnGatewayCode() {
+		return get("billers.column.gatewayCode", "gatewayCode");
+	}
+
+	public String productsTable() {
+		return get("products.table", "dbo.Products");
+	}
+
+	public String productsColumnId() {
+		return get("products.column.id", "id");
+	}
+
+	public String productsColumnGatewayCode() {
+		return get("products.column.gatewayCode", "gatewayCode");
 	}
 }

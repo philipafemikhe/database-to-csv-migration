@@ -4,22 +4,20 @@ import com.example.demo.migration.WarningCollector;
 import com.example.demo.migration.db.JdbcUtils;
 import com.example.demo.migration.model.BankBranchRecord;
 import com.example.demo.migration.model.BankRecord;
-import com.example.demo.migration.model.CountryPartnerRecord;
 import com.example.demo.migration.model.UserRecord;
 import com.example.demo.migration.repo.BankBranchesRepository;
 import com.example.demo.migration.repo.BanksRepository;
-import com.example.demo.migration.repo.CountryPartnerRepository;
 import com.example.demo.migration.repo.UsersRepository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Locale;
 
 /**
- * dbo.TransferBeneficiaries -> beneficiary_details
+ * dbo.TransferBeneficiaries -> beneficiary_details, per TransferBeneficaries_Migration_Logic.xlsx.
  *
  *   customer_id            <- Users.userName (lookup by TransferBeneficiaries.customer_id)
- *   customer_country_code  <- CountryPartner lookup by Users.country_id (a short code like "BW",
- *                              not the raw numeric id)
+ *   customer_country_code  <- Users.country_id, mapped via IswCountry's fixed 1-4 table
  *   beneficiary_type       <- transactionType, mapped via BeneficiaryTypeMapper
  *   beneficiary_name       <- accountName
  *   account_number         <- accountNumber
@@ -27,8 +25,12 @@ import java.sql.SQLException;
  *   branch_name            <- BankBranches lookup by bankBranch_id, only for Botswana + EFT,
  *                              validated against the row's bank_id
  *   has_branches           <- true iff branch_name was resolved
- *   branch_code            <- bankBranch_id, copied verbatim regardless of country/type
- *   wallet_type            <- Banks.name, only for Zambia when the bank is a wallet institution
+ *   branch_code            <- BankBranches.gatewayCode, looked up by bankBranch_id (any
+ *                              country/type - independent of the branch_name validation above)
+ *   wallet_type            <- Banks.code, only for Zambia when the bank is a wallet institution
+ *                              with allowInstantTransfer=1
+ *   bank_gateway_code      <- Banks.swiftCode (the gatewayCode column) for RTGS rows, Banks.code
+ *                              for INSTANT rows; blank for LOCAL/EFT
  *   is_active / is_deleted <- true / false (always)
  *   created_at             <- migration run timestamp (source table has no createDate)
  *   beneficiary_currency   <- accountCurrency
@@ -39,8 +41,7 @@ public final class TransferBeneficiaryMapper {
 	}
 
 	public static OutputRecord mapRow(ResultSet rs, UsersRepository users, BanksRepository banks,
-			BankBranchesRepository branches, CountryPartnerRepository countries, String runTimestamp,
-			WarningCollector warnings) throws SQLException {
+			BankBranchesRepository branches, String runTimestamp, WarningCollector warnings) throws SQLException {
 
 		long oldId = rs.getLong("id");
 		String accountName = JdbcUtils.getString(rs, "accountName");
@@ -54,60 +55,71 @@ public final class TransferBeneficiaryMapper {
 		UserRecord user = users.findById(customerId);
 		String customerIdOut = "";
 		String customerCountryCodeOut = "";
-		String countryLabel = null;
+		IswCountry country = null;
 		if (user == null) {
 			if (customerId != null) {
 				warnings.warn(oldId, "customer_id " + customerId + " not found in Users; customer_id/customer_country_code left blank");
 			}
 		} else {
 			customerIdOut = user.userName() == null ? "" : user.userName();
-			if (user.countryId() != null) {
-				CountryPartnerRecord country = countries.findById(user.countryId());
-				if (country == null) {
-					warnings.warn(oldId, "country_id " + user.countryId() + " not found in CountryPartner; customer_country_code left blank");
-				} else {
-					countryLabel = country.label();
-					customerCountryCodeOut = countryLabel == null ? "" : countryLabel;
-				}
+			country = IswCountry.fromId(user.countryId());
+			if (user.countryId() != null && country == null) {
+				warnings.warn(oldId, "country_id " + user.countryId() + " not recognized (expected 1-4); customer_country_code left blank");
+			} else if (country != null) {
+				customerCountryCodeOut = country.code();
 			}
 		}
 
-		boolean countryIsZambia = CountryMatcher.isZambia(countryLabel);
-		boolean countryIsBotswana = CountryMatcher.isBotswana(countryLabel);
+		boolean countryIsZambia = country == IswCountry.ZAMBIA;
+		boolean countryIsBotswana = country == IswCountry.BOTSWANA;
 
 		BankRecord bank = banks.findById(bankId);
 		if (bankId != null && bank == null && banks.isAvailable()) {
 			warnings.warn(oldId, "bank_id " + bankId + " not found in Banks; bank_name/swift_code left blank");
 		}
-		boolean bankIsWallet = bank != null && bank.wallet();
 
-		String beneficiaryType = BeneficiaryTypeMapper.map(transactionType, countryIsZambia, bankIsWallet);
+		String beneficiaryType = BeneficiaryTypeMapper.map(transactionType, countryIsZambia, bank);
 		if (beneficiaryType == null && transactionType != null) {
 			warnings.warn(oldId, "unrecognized transactionType '" + transactionType + "'; beneficiary_type left blank");
 		}
 
-		String walletType = (countryIsZambia && bankIsWallet && bank != null) ? bank.name() : null;
+		boolean zambiaInstantWallet = countryIsZambia && bank != null && bank.wallet() && Boolean.TRUE.equals(bank.allowInstantTransfer());
+		String walletType = zambiaInstantWallet ? bank.code() : null;
 
-		String branchName = null;
-		boolean hasBranches = false;
-		if (countryIsBotswana && "EFT".equalsIgnoreCase(transactionType)) {
-			if (bankBranchId == null) {
-				warnings.warn(oldId, "Botswana EFT row has no bankBranch_id; branch_name left blank");
-			} else {
-				BankBranchRecord branch = branches.findById(bankBranchId);
-				if (branch == null) {
-					warnings.warn(oldId, "bankBranch_id " + bankBranchId + " not found in BankBranches; branch_name left blank");
-				} else if (bankId != null && branch.bankId() != null && !branch.bankId().equals(bankId)) {
-					warnings.warn(oldId, "bankBranch_id " + bankBranchId + " belongs to bank " + branch.bankId()
-							+ ", not row's bank_id " + bankId + "; branch_name left blank");
-				} else {
-					branchName = branch.name();
-					hasBranches = true;
-				}
+		String bankGatewayCode = null;
+		if (bank != null && transactionType != null) {
+			String normalizedType = transactionType.trim().toUpperCase(Locale.ROOT);
+			if ("RTGS".equals(normalizedType)) {
+				bankGatewayCode = bank.swiftCode();
+			} else if ("INSTANT".equals(normalizedType)) {
+				bankGatewayCode = bank.code();
 			}
 		}
 
-		String branchCode = bankBranchId == null ? null : String.valueOf(bankBranchId);
+		BankBranchRecord branch = bankBranchId == null ? null : branches.findById(bankBranchId);
+		boolean botswanaEft = countryIsBotswana && "EFT".equalsIgnoreCase(transactionType);
+		if (bankBranchId == null) {
+			if (botswanaEft) {
+				warnings.warn(oldId, "Botswana EFT row has no bankBranch_id; branch_name left blank");
+			}
+		} else if (branch == null) {
+			warnings.warn(oldId, "bankBranch_id " + bankBranchId + " not found in BankBranches; branch_code left blank"
+					+ (botswanaEft ? " and branch_name left blank" : ""));
+		}
+
+		String branchName = null;
+		boolean hasBranches = false;
+		if (botswanaEft && branch != null) {
+			if (bankId != null && branch.bankId() != null && !branch.bankId().equals(bankId)) {
+				warnings.warn(oldId, "bankBranch_id " + bankBranchId + " belongs to bank " + branch.bankId()
+						+ ", not row's bank_id " + bankId + "; branch_name left blank");
+			} else {
+				branchName = branch.name();
+				hasBranches = true;
+			}
+		}
+
+		String branchCode = branch == null ? null : branch.gatewayCode();
 
 		return new OutputRecord(BeneficiaryDetailsSchema.HEADER)
 				.set("beneficiary_id", oldId)
@@ -125,6 +137,7 @@ public final class TransferBeneficiaryMapper {
 				.set("wallet_type", walletType)
 				.set("beneficiary_currency", accountCurrency)
 				.set("has_branches", hasBranches)
-				.set("branch_code", branchCode);
+				.set("branch_code", branchCode)
+				.set("bank_gateway_code", bankGatewayCode);
 	}
 }

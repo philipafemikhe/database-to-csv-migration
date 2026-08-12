@@ -29,9 +29,11 @@ public final class ArgParser {
 				raw.get("config"),
 				raw.get("output"),
 				raw.get("output-customers"),
+				raw.get("output-transactions"),
 				raw.get("limit"),
 				raw.containsKey("describe-schema"),
 				raw.containsKey("skip-beneficiaries"),
-				raw.containsKey("skip-customers"));
+				raw.containsKey("skip-customers"),
+				raw.containsKey("skip-transactions"));
 	}
 }

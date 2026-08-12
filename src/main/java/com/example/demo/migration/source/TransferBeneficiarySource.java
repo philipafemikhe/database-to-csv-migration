@@ -6,7 +6,6 @@ import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.TransferBeneficiaryMapper;
 import com.example.demo.migration.repo.BankBranchesRepository;
 import com.example.demo.migration.repo.BanksRepository;
-import com.example.demo.migration.repo.CountryPartnerRepository;
 import com.example.demo.migration.repo.UsersRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,8 +25,7 @@ public final class TransferBeneficiarySource {
 	}
 
 	public static int migrate(Connection connection, MigrationConfig config, UsersRepository users, BanksRepository banks,
-			BankBranchesRepository branches, CountryPartnerRepository countries, CsvWriter writer,
-			String runTimestamp, WarningCollector warnings) throws SQLException, IOException {
+			BankBranchesRepository branches, CsvWriter writer, String runTimestamp, WarningCollector warnings) throws SQLException, IOException {
 
 		String columns = "id, accountName, accountNumber, bank_id, customer_id, accountCurrency, transactionType, bankBranch_id";
 		Integer limit = config.rowLimit();
@@ -40,7 +38,7 @@ public final class TransferBeneficiarySource {
 			st.setFetchSize(1000);
 			try (ResultSet rs = st.executeQuery(sql)) {
 				while (rs.next()) {
-					writer.write(TransferBeneficiaryMapper.mapRow(rs, users, banks, branches, countries, runTimestamp, warnings));
+					writer.write(TransferBeneficiaryMapper.mapRow(rs, users, banks, branches, runTimestamp, warnings));
 					count++;
 					if (count % PROGRESS_INTERVAL == 0) {
 						log.info("TransferBeneficiaries: {} rows migrated so far...", count);

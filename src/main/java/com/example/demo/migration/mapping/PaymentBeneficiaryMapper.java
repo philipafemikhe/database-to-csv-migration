@@ -3,9 +3,7 @@ package com.example.demo.migration.mapping;
 import com.example.demo.migration.WarningCollector;
 import com.example.demo.migration.db.JdbcUtils;
 import com.example.demo.migration.json.AdditionalParamsParser;
-import com.example.demo.migration.model.CountryPartnerRecord;
 import com.example.demo.migration.model.UserRecord;
-import com.example.demo.migration.repo.CountryPartnerRepository;
 import com.example.demo.migration.repo.UsersRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -25,8 +23,10 @@ import java.sql.Timestamp;
  *                               in the same output file)
  *   customer_id             <- additionalParams.userName, falling back to Users.userName by
  *                               customer_id if the JSON doesn't carry it
- *   customer_country_code   <- CountryPartner lookup by Users.country_id (by customer_id); a
- *                               short code like "BW", not the raw numeric id
+ *   customer_country_code   <- Users.country_id (by customer_id), mapped via IswCountry's fixed
+ *                               1-4 table - same source used for TransferBeneficiaries' own
+ *                               customer_country_code, kept consistent since both mappers feed
+ *                               the same column in the same merged beneficiary_details.csv
  *   beneficiary_name        <- destinationAccountName, else additionalParams (toAccountName /
  *                               customerName / beneficiaryName)
  *   account_number          <- destinationAccountNumber, else additionalParams.accountNumber
@@ -41,8 +41,7 @@ public final class PaymentBeneficiaryMapper {
 	private PaymentBeneficiaryMapper() {
 	}
 
-	public static OutputRecord mapRow(ResultSet rs, UsersRepository users, CountryPartnerRepository countries,
-			long idOffset, WarningCollector warnings) throws SQLException {
+	public static OutputRecord mapRow(ResultSet rs, UsersRepository users, long idOffset, WarningCollector warnings) throws SQLException {
 
 		long oldId = rs.getLong("id");
 		String additionalParams = JdbcUtils.getString(rs, "additionalParams");
@@ -61,11 +60,11 @@ public final class PaymentBeneficiaryMapper {
 		UserRecord user = users.findById(customerId);
 		String customerCountryCodeOut = "";
 		if (user != null && user.countryId() != null) {
-			CountryPartnerRecord country = countries.findById(user.countryId());
+			IswCountry country = IswCountry.fromId(user.countryId());
 			if (country == null) {
-				warnings.warn(oldId, "country_id " + user.countryId() + " not found in CountryPartner; customer_country_code left blank");
-			} else if (country.label() != null) {
-				customerCountryCodeOut = country.label();
+				warnings.warn(oldId, "country_id " + user.countryId() + " not recognized (expected 1-4); customer_country_code left blank");
+			} else {
+				customerCountryCodeOut = country.code();
 			}
 		}
 

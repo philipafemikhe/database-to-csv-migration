@@ -22,7 +22,7 @@ public final class BankBranchesRepository {
 
 	public static BankBranchesRepository load(Connection connection, String table) throws SQLException {
 		BankBranchesRepository repo = new BankBranchesRepository();
-		String sql = "SELECT id, name, bank_id, code FROM " + table;
+		String sql = "SELECT id, name, bank_id, code, gatewayCode FROM " + table;
 		try (Statement st = connection.createStatement();
 				ResultSet rs = st.executeQuery(sql)) {
 			while (rs.next()) {
@@ -30,7 +30,8 @@ public final class BankBranchesRepository {
 				String name = JdbcUtils.getString(rs, "name");
 				Long bankId = JdbcUtils.getLong(rs, "bank_id");
 				String code = JdbcUtils.getString(rs, "code");
-				BankBranchRecord branch = new BankBranchRecord(id, name, bankId, code);
+				String gatewayCode = JdbcUtils.getString(rs, "gatewayCode");
+				BankBranchRecord branch = new BankBranchRecord(id, name, bankId, code, gatewayCode);
 				repo.byId.put(id, branch);
 				if (code != null) {
 					repo.byRawCode.putIfAbsent(code.toUpperCase(Locale.ROOT), branch);
