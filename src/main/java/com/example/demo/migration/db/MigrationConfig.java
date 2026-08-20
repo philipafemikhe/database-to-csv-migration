@@ -18,8 +18,8 @@ import java.util.Properties;
  *   banks.table, banks.column.id, banks.column.name, banks.column.swiftCode,
  *     banks.column.institution, banks.column.allowInstantTransfer, banks.column.code, banks.wallet.marker
  *   countryPartner.table, countryPartner.column.id, countryPartner.column.name
- *   billers.table, billers.column.id, billers.column.gatewayCode
- *   products.table, products.column.id, products.column.gatewayCode
+ *   billers.table, billers.column.id, billers.column.gatewayCode, billers.column.name
+ *   products.table, products.column.id, products.column.gatewayCode, products.column.name
  */
 public final class MigrationConfig {
 
@@ -176,6 +176,10 @@ public final class MigrationConfig {
 		return get("billers.column.gatewayCode", "gatewayCode");
 	}
 
+	public String billersColumnName() {
+		return get("billers.column.name", "name");
+	}
+
 	public String productsTable() {
 		return get("products.table", "dbo.Products");
 	}
@@ -186,5 +190,9 @@ public final class MigrationConfig {
 
 	public String productsColumnGatewayCode() {
 		return get("products.column.gatewayCode", "gatewayCode");
+	}
+
+	public String productsColumnName() {
+		return get("products.column.name", "name");
 	}
 }

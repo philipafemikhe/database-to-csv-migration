@@ -15,9 +15,11 @@ public final class CliOptions {
 	private final boolean skipBeneficiaries;
 	private final boolean skipCustomers;
 	private final boolean skipTransactions;
+	private final boolean splitByCountry;
 
 	CliOptions(boolean help, String configPath, String output, String outputCustomers, String outputTransactions,
-			String limit, boolean describeSchema, boolean skipBeneficiaries, boolean skipCustomers, boolean skipTransactions) {
+			String limit, boolean describeSchema, boolean skipBeneficiaries, boolean skipCustomers, boolean skipTransactions,
+			boolean splitByCountry) {
 		this.help = help;
 		this.configPath = configPath;
 		this.output = output;
@@ -28,6 +30,7 @@ public final class CliOptions {
 		this.skipBeneficiaries = skipBeneficiaries;
 		this.skipCustomers = skipCustomers;
 		this.skipTransactions = skipTransactions;
+		this.splitByCountry = splitByCountry;
 	}
 
 	public boolean help() {
@@ -68,5 +71,9 @@ public final class CliOptions {
 
 	public boolean skipTransactions() {
 		return skipTransactions;
+	}
+
+	public boolean splitByCountry() {
+		return splitByCountry;
 	}
 }

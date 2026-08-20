@@ -4,10 +4,12 @@ public final class ProductRecord {
 
 	private final long id;
 	private final String gatewayCode;
+	private final String name;
 
-	public ProductRecord(long id, String gatewayCode) {
+	public ProductRecord(long id, String gatewayCode, String name) {
 		this.id = id;
 		this.gatewayCode = gatewayCode;
+		this.name = name;
 	}
 
 	public long id() {
@@ -16,5 +18,9 @@ public final class ProductRecord {
 
 	public String gatewayCode() {
 		return gatewayCode;
+	}
+
+	public String name() {
+		return name;
 	}
 }

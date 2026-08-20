@@ -34,6 +34,7 @@ import java.sql.Statement;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -113,18 +114,26 @@ class MigrationIntegrationTest {
 					+ "  (200, 'Malawi Instant Bank', 'MWIXXXXX', 'BANK', TRUE, 'MWINSTANT'),\n"
 					+ "  (201, 'Malawi Standard Bank', 'MWSTXXXX', 'BANK', FALSE, 'MWSTD')\n");
 
-			st.execute("CREATE TABLE dbo.Billers (id BIGINT, gatewayCode VARCHAR(50))");
+			st.execute("CREATE TABLE dbo.Billers (id BIGINT, gatewayCode VARCHAR(50), name VARCHAR(100))");
 			st.execute("INSERT INTO dbo.Billers VALUES\n"
-					+ "  (10, 'Simpo Cash'),\n"
-					+ "  (11, 'Random Biller'),\n"
-					+ "  (12, 'Orange-B2C'),\n"
-					+ "  (13, 'Other BW Biller')\n");
+					+ "  (10, 'Simpo Cash', 'Simpo Cash'),\n"
+					+ "  (11, 'Random Biller', 'Random Biller'),\n"
+					+ "  (12, 'Orange-B2C', 'Orange B2C'),\n"
+					+ "  (13, 'Other BW Biller', 'Other BW Biller'),\n"
+					+ "  (5, 'ESCOMPAY', 'ESCOM'),\n"
+					+ "  (7, 'WBPAY', 'Water Board'),\n"
+					+ "  (90, 'ORANGEPAY', 'Orange Money'),\n"
+					+ "  (115, 'MASCOMPAY', 'Mascom MyZaka')\n");
 
-			st.execute("CREATE TABLE dbo.Products (id BIGINT, gatewayCode VARCHAR(50))");
+			st.execute("CREATE TABLE dbo.Products (id BIGINT, gatewayCode VARCHAR(50), name VARCHAR(100))");
 			st.execute("INSERT INTO dbo.Products VALUES\n"
-					+ "  (14, 'TNMAIR'),\n"
-					+ "  (15, 'AIRB2W'),\n"
-					+ "  (16, 'UNKNOWNCODE')\n");
+					+ "  (14, 'TNMAIR', 'TNM Airtime'),\n"
+					+ "  (15, 'AIRB2W', 'Airtel B2W'),\n"
+					+ "  (16, 'UNKNOWNCODE', 'Unknown Product'),\n"
+					+ "  (69, 'MW-ESCOM-WALLET', 'ESCOM Wallet'),\n"
+					+ "  (10083, 'MW-WB-WALLET', 'Water Board Wallet'),\n"
+					+ "  (90, 'BW-ORANGE-WALLET', 'Orange Wallet'),\n"
+					+ "  (115, 'BW-MASCOM-WALLET', 'Mascom Wallet')\n");
 
 			st.execute("CREATE TABLE dbo.BankBranches (id BIGINT, name VARCHAR(100), bank_id BIGINT, code VARCHAR(20), gatewayCode VARCHAR(20))");
 			st.execute("INSERT INTO dbo.BankBranches VALUES\n"
@@ -161,15 +170,26 @@ class MigrationIntegrationTest {
 					+ "  (12, 'Unresolved Customer', '888', 88, 999, 'MWK', 'LOCAL', NULL)\n");
 
 			st.execute("CREATE TABLE dbo.PaymentBeneficiaries (\n"
-					+ "  id BIGINT, additionalParams VARCHAR(2000), customer_id BIGINT, biller_id BIGINT,\n"
-					+ "  quickPay BOOLEAN, createDate TIMESTAMP, destinationAccountNumber VARCHAR(50), destinationAccountName VARCHAR(100)\n"
+					+ "  id BIGINT, additionalParams VARCHAR(2000), customer_id BIGINT, biller_id BIGINT, product_id BIGINT,\n"
+					+ "  quickPay BOOLEAN, createDate TIMESTAMP, destinationAccountNumber VARCHAR(50), destinationAccountName VARCHAR(100),\n"
+					+ "  customerReferece VARCHAR(50)\n"
 					+ ")");
 			st.execute("INSERT INTO dbo.PaymentBeneficiaries VALUES\n"
 					+ "  (500, '{\"userName\":\"R0498292\",\"accountNumber\":\"0001503165339\",\"currencyCode\":\"MWK\",\"customerName\":\"EMMANUEL KALULU\"}',\n"
-					+ "   300, 5, FALSE, '2026-03-20 14:05:38.456', NULL, NULL),\n"
+					+ "   300, 5, NULL, FALSE, '2026-03-20 14:05:38.456', NULL, NULL, NULL),\n"
 					+ "  (501, '{\"userName\":\"R0512210\",\"toAccountName\":\"Nathan Direct\",\"accountNumber\":\"999\",\"currencyCode\":\"MWK\"}',\n"
-					+ "   300, 6, TRUE, '2026-03-23 08:57:08.711', '8888', 'Override Name'),\n"
-					+ "  (502, 'not-json', 999, 7, FALSE, '2026-01-01 00:00:00.000', NULL, NULL)\n");
+					+ "   300, 6, NULL, TRUE, '2026-03-23 08:57:08.711', '8888', 'Override Name', NULL),\n"
+					+ "  (502, 'not-json', 999, 7, NULL, FALSE, '2026-01-01 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (503, '{\"userName\":\"R000100\",\"customerName\":\"MALAWI WALLET GUY\",\"currencyCode\":\"MWK\"}',\n"
+					+ "   100, 5, 69, FALSE, '2026-04-01 00:00:00.000', NULL, NULL, 'REF-503'),\n"
+					+ "  (504, '{\"userName\":\"R000100\",\"customerName\":\"MALAWI NONWALLET GUY\",\"currencyCode\":\"MWK\"}',\n"
+					+ "   100, 11, NULL, FALSE, '2026-04-02 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (505, '{\"userName\":\"R000200\",\"customerName\":\"BOTSWANA WALLET GUY\",\"currencyCode\":\"BWP\"}',\n"
+					+ "   200, 90, 90, FALSE, '2026-04-03 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (506, '{\"userName\":\"R000200\",\"customerName\":\"BOTSWANA NONWALLET GUY\",\"currencyCode\":\"BWP\"}',\n"
+					+ "   200, 12, NULL, FALSE, '2026-04-04 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (507, '{\"userName\":\"R000250\",\"customerName\":\"ZAMBIA GUY\",\"currencyCode\":\"ZMW\"}',\n"
+					+ "   250, 10, NULL, FALSE, '2026-04-05 00:00:00.000', NULL, NULL, NULL)\n");
 
 			st.execute("CREATE TABLE dbo.Transactions (\n"
 					+ "  DTYPE VARCHAR(30), id BIGINT, amount NUMERIC(19,2), charge NUMERIC(19,2), bankReference VARCHAR(255),\n"
@@ -217,26 +237,33 @@ class MigrationIntegrationTest {
 		UsersRepository users = UsersRepository.load(connection, config.usersTable());
 		BanksRepository banks = BanksRepository.load(connection, config);
 		BankBranchesRepository branches = BankBranchesRepository.load(connection, config.bankBranchesTable());
+		BillersRepository billers = BillersRepository.load(connection, config);
+		ProductsRepository products = ProductsRepository.load(connection, config);
 
 		assertTrue(banks.isAvailable());
 		assertEquals(7, banks.size());
+		assertTrue(billers.isAvailable());
+		assertEquals(8, billers.size());
+		assertTrue(products.isAvailable());
+		assertEquals(7, products.size());
 
 		WarningCollector transferWarnings = new WarningCollector("TransferBeneficiaries");
 		WarningCollector paymentWarnings = new WarningCollector("PaymentBeneficiaries");
 		Path outputPath = tempDir.resolve("beneficiary_details.csv");
+		String runTimestamp = "2026-07-20 10:00:00.000";
 
 		int transferCount;
 		int paymentCount;
 		try (CsvWriter writer = new CsvWriter(outputPath, BeneficiaryDetailsSchema.HEADER)) {
-			transferCount = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, "2026-07-20 10:00:00.000", transferWarnings);
-			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, writer, paymentWarnings);
+			transferCount = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, transferWarnings);
+			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, billers, products, writer, runTimestamp, paymentWarnings);
 		}
 
 		assertEquals(12, transferCount);
-		assertEquals(3, paymentCount);
+		assertEquals(8, paymentCount);
 
 		Map<String, CSVRecord> byId = readCsvById(outputPath, BeneficiaryDetailsSchema.HEADER, "beneficiary_id");
-		assertEquals(15, byId.size());
+		assertEquals(20, byId.size());
 
 		// Botswana EFT, valid branch match. customer_country_code now comes from the fixed
 		// IswCountry table (country_id=2 -> BW), not the dynamic CountryPartner lookup.
@@ -332,21 +359,133 @@ class MigrationIntegrationTest {
 		assertEquals("false", p1.get("is_favourite"));
 		assertEquals("5", p1.get("biller_id"));
 		assertEquals("2026-03-20 14:05:38.456", p1.get("created_at"));
+		// Zimbabwe: beneficiary_type is always BILL, regardless of biller_id; beneficiary_country
+		// mirrors customer_country_code; nickname comes from additionalParams.customerName;
+		// biller_name is resolved from Billers (biller_id 5 exists in this table too).
+		assertEquals("BILL", p1.get("beneficiary_type"));
+		assertEquals("ZW", p1.get("beneficiary_country"));
+		assertEquals("EMMANUEL KALULU", p1.get("nickname"));
+		assertEquals("ESCOM", p1.get("biller_name"));
+		assertEquals("SYSTEM", p1.get("created_by"));
+		assertEquals("SYSTEM", p1.get("last_modified_by"));
+		assertEquals(runTimestamp, p1.get("last_modified_at"));
 
 		// destinationAccountNumber/Name override JSON when present.
 		CSVRecord p2 = byId.get(String.valueOf(501 + offset));
 		assertEquals("Override Name", p2.get("beneficiary_name"));
 		assertEquals("8888", p2.get("account_number"));
 		assertEquals("true", p2.get("is_favourite"));
+		// biller_id 6 isn't in the Billers table -> biller_name left blank (separate warning).
+		assertEquals("", p2.get("biller_name"));
 
 		// Invalid JSON + unresolved customer -> blank customer_id.
 		CSVRecord p3 = byId.get(String.valueOf(502 + offset));
 		assertEquals("", p3.get("customer_id"));
+		// Unresolved customer -> no country, so beneficiary_type/beneficiary_country stay blank too.
+		assertEquals("", p3.get("beneficiary_type"));
+		assertEquals("", p3.get("beneficiary_country"));
+
+		// Malawi + (biller_id=5 AND product_id=69) -> IWL, wallet_type/wallet_code from Products.
+		CSVRecord p4 = byId.get(String.valueOf(503 + offset));
+		assertEquals("MW", p4.get("beneficiary_country"));
+		assertEquals("IWL", p4.get("beneficiary_type"));
+		assertEquals("ESCOM Wallet", p4.get("wallet_type"));
+		assertEquals("MW-ESCOM-WALLET", p4.get("wallet_code"));
+		assertEquals("ESCOM", p4.get("biller_name"));
+		assertEquals("REF-503", p4.get("biller_input_value"));
+		assertEquals("MALAWI WALLET GUY", p4.get("nickname"));
+		assertEquals("MALAWI WALLET GUY", p4.get("beneficiary_name"));
+
+		// Malawi, biller_id not in the wallet pair -> BILL, no wallet_type/wallet_code.
+		CSVRecord p5 = byId.get(String.valueOf(504 + offset));
+		assertEquals("BILL", p5.get("beneficiary_type"));
+		assertEquals("", p5.get("wallet_type"));
+		assertEquals("", p5.get("wallet_code"));
+		assertEquals("Random Biller", p5.get("biller_name"));
+
+		// Botswana + biller_id IN (90, 115) -> IWL, wallet_type/wallet_code from Products.
+		CSVRecord p6 = byId.get(String.valueOf(505 + offset));
+		assertEquals("BW", p6.get("beneficiary_country"));
+		assertEquals("IWL", p6.get("beneficiary_type"));
+		assertEquals("Orange Wallet", p6.get("wallet_type"));
+		assertEquals("BW-ORANGE-WALLET", p6.get("wallet_code"));
+
+		// Botswana, biller_id not in (90, 115) -> BILL.
+		CSVRecord p7 = byId.get(String.valueOf(506 + offset));
+		assertEquals("BILL", p7.get("beneficiary_type"));
+		assertEquals("", p7.get("wallet_type"));
+
+		// Zambia -> BILL unconditionally, regardless of biller_id.
+		CSVRecord p8 = byId.get(String.valueOf(507 + offset));
+		assertEquals("ZM", p8.get("beneficiary_country"));
+		assertEquals("BILL", p8.get("beneficiary_type"));
+		assertEquals("", p8.get("wallet_type"));
 
 		// TransferBeneficiaries warnings: mismatch(row2), missing branch(row3), unknown type(row11), unresolved customer(row12).
 		assertEquals(4, transferWarnings.size(), "transfer warnings: " + transferWarnings.all());
-		// PaymentBeneficiaries warnings: invalid json(row502) + unresolved customer fallback(row502).
-		assertEquals(2, paymentWarnings.size(), "payment warnings: " + paymentWarnings.all());
+		// PaymentBeneficiaries warnings: invalid json(row502) + unresolved customer fallback(row502) + biller_id 6 not found(row501).
+		assertEquals(3, paymentWarnings.size(), "payment warnings: " + paymentWarnings.all());
+	}
+
+	@Test
+	void splitsBeneficiaryDetailsAndTransactionsByCountryWhenRequested() throws Exception {
+		Path beneficiaryBase = tempDir.resolve("beneficiary_details_split.csv");
+		Path transactionBase = tempDir.resolve("transaction_split.csv");
+		config.override("output", beneficiaryBase.toString());
+		config.override("output.transactions", transactionBase.toString());
+
+		new MigrationRunner(connection, config).run(true, false, true, true);
+
+		// No merged file should be written in split mode.
+		assertFalse(Files.exists(beneficiaryBase));
+		assertFalse(Files.exists(transactionBase));
+
+		Path beneficiaryMw = tempDir.resolve("beneficiary_details_split_MW.csv");
+		Path beneficiaryBw = tempDir.resolve("beneficiary_details_split_BW.csv");
+		Path beneficiaryZw = tempDir.resolve("beneficiary_details_split_ZW.csv");
+		Path beneficiaryZm = tempDir.resolve("beneficiary_details_split_ZM.csv");
+		Path beneficiaryUnknown = tempDir.resolve("beneficiary_details_split_UNKNOWN.csv");
+		assertTrue(Files.exists(beneficiaryMw));
+		assertTrue(Files.exists(beneficiaryBw));
+		assertTrue(Files.exists(beneficiaryZw));
+		assertTrue(Files.exists(beneficiaryZm));
+		assertTrue(Files.exists(beneficiaryUnknown));
+
+		// Same 12 TransferBeneficiaries + 8 PaymentBeneficiaries rows as the merged-file test,
+		// just spread across per-country files instead of one beneficiary_details.csv.
+		int totalBeneficiaryRows = readCsvById(beneficiaryMw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
+				+ readCsvById(beneficiaryBw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
+				+ readCsvById(beneficiaryZw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
+				+ readCsvById(beneficiaryZm, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
+				+ readCsvById(beneficiaryUnknown, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size();
+		assertEquals(20, totalBeneficiaryRows);
+
+		// Row 1 (Botswana EFT, customer 200) lands in the BW file, and nowhere else.
+		assertTrue(readCsvById(beneficiaryBw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").containsKey("1"));
+		assertFalse(readCsvById(beneficiaryMw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").containsKey("1"));
+		// Row 12 (unresolved customer_id) has no resolvable country -> the UNKNOWN file.
+		assertTrue(readCsvById(beneficiaryUnknown, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").containsKey("12"));
+
+		Path transactionMw = tempDir.resolve("transaction_split_MW.csv");
+		Path transactionBw = tempDir.resolve("transaction_split_BW.csv");
+		Path transactionZw = tempDir.resolve("transaction_split_ZW.csv");
+		Path transactionZm = tempDir.resolve("transaction_split_ZM.csv");
+		Path transactionUnknown = tempDir.resolve("transaction_split_UNKNOWN.csv");
+		assertTrue(Files.exists(transactionMw));
+		assertTrue(Files.exists(transactionBw));
+		assertTrue(Files.exists(transactionZw));
+		assertTrue(Files.exists(transactionZm));
+		assertTrue(Files.exists(transactionUnknown));
+
+		int totalTransactionRows = readCsvById(transactionMw, TransactionSchema.HEADER, "id").size()
+				+ readCsvById(transactionBw, TransactionSchema.HEADER, "id").size()
+				+ readCsvById(transactionZw, TransactionSchema.HEADER, "id").size()
+				+ readCsvById(transactionZm, TransactionSchema.HEADER, "id").size()
+				+ readCsvById(transactionUnknown, TransactionSchema.HEADER, "id").size();
+		assertEquals(25, totalTransactionRows);
+
+		// Transaction 9024 has an unrecognized country_id (99) -> the UNKNOWN file.
+		assertTrue(readCsvById(transactionUnknown, TransactionSchema.HEADER, "id").containsKey("9024"));
 	}
 
 	@Test
@@ -441,9 +580,9 @@ class MigrationIntegrationTest {
 		ProductsRepository products = ProductsRepository.load(connection, config);
 
 		assertTrue(billers.isAvailable());
-		assertEquals(4, billers.size());
+		assertEquals(8, billers.size());
 		assertTrue(products.isAvailable());
-		assertEquals(3, products.size());
+		assertEquals(7, products.size());
 
 		WarningCollector warnings = new WarningCollector("Transactions");
 		Path outputPath = tempDir.resolve("transaction.csv");

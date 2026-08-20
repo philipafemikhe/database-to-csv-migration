@@ -1,7 +1,7 @@
 package com.example.demo.migration.source;
 
 import com.example.demo.migration.WarningCollector;
-import com.example.demo.migration.csv.CsvWriter;
+import com.example.demo.migration.csv.RecordWriter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.TransactionMapper;
 import com.example.demo.migration.repo.BanksRepository;
@@ -26,7 +26,7 @@ public final class TransactionSource {
 	}
 
 	public static int migrate(Connection connection, MigrationConfig config, UsersRepository users, BanksRepository banks,
-			BillersRepository billers, ProductsRepository products, CsvWriter writer, WarningCollector warnings) throws SQLException, IOException {
+			BillersRepository billers, ProductsRepository products, RecordWriter writer, WarningCollector warnings) throws SQLException, IOException {
 
 		String columns = "DTYPE, id, amount, charge, bankReference, deviceUUID, narration, sourceAccount, status, "
 				+ "statusCode, statusDescription, transactionDate, destinationAccount, transferProcessor, customerReference, "

@@ -1,9 +1,11 @@
 package com.example.demo.migration.source;
 
 import com.example.demo.migration.WarningCollector;
-import com.example.demo.migration.csv.CsvWriter;
+import com.example.demo.migration.csv.RecordWriter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.PaymentBeneficiaryMapper;
+import com.example.demo.migration.repo.BillersRepository;
+import com.example.demo.migration.repo.ProductsRepository;
 import com.example.demo.migration.repo.UsersRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,9 +25,11 @@ public final class PaymentBeneficiarySource {
 	}
 
 	public static int migrate(Connection connection, MigrationConfig config, UsersRepository users,
-			CsvWriter writer, WarningCollector warnings) throws SQLException, IOException {
+			BillersRepository billers, ProductsRepository products, RecordWriter writer, String runTimestamp,
+			WarningCollector warnings) throws SQLException, IOException {
 
-		String columns = "id, additionalParams, customer_id, biller_id, quickPay, createDate, destinationAccountNumber, destinationAccountName";
+		String columns = "id, additionalParams, customer_id, biller_id, product_id, quickPay, createDate, "
+				+ "destinationAccountNumber, destinationAccountName, customerReferece";
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
 		String sql = "SELECT " + top + columns + " FROM " + config.paymentBeneficiariesTable();
@@ -37,7 +41,7 @@ public final class PaymentBeneficiarySource {
 			st.setFetchSize(1000);
 			try (ResultSet rs = st.executeQuery(sql)) {
 				while (rs.next()) {
-					writer.write(PaymentBeneficiaryMapper.mapRow(rs, users, offset, warnings));
+					writer.write(PaymentBeneficiaryMapper.mapRow(rs, users, billers, products, offset, runTimestamp, warnings));
 					count++;
 					if (count % PROGRESS_INTERVAL == 0) {
 						log.info("PaymentBeneficiaries: {} rows migrated so far...", count);

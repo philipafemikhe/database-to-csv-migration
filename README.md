@@ -55,6 +55,13 @@ Useful flags:
 - `--limit=N` — cap rows read per source table (dry run against a test DB).
 - `--skip-beneficiaries` / `--skip-customers` / `--skip-transactions` — run just a subset of the
   three migrations.
+- `--split-by-country` — write `beneficiary_details` and `transaction` as one file per country
+  (e.g. `beneficiary_details_migrated_MW.csv`, `_BW.csv`, `_ZW.csv`, `_ZM.csv`) instead of a
+  single merged file, keyed off the same fixed IswCountry code each row already carries
+  (`customer_country_code` for beneficiary_details, `country_code` for transaction). Rows with no
+  resolvable country go to a `_UNKNOWN` file so row counts still reconcile. `customer_info` is
+  never split - it's grouped by a different, dynamic `CountryPartner` lookup, not the fixed
+  IswCountry table, so it has no consistent country code to split on.
 
 ## Logging
 
@@ -134,6 +141,23 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   parsed from the `additionalParams` JSON blob (falling back to `destinationAccountNumber` /
   `destinationAccountName` when present). Their `beneficiary_id` is offset by
   `payment.id.offset` to avoid colliding with `TransferBeneficiaries` ids in the merged output.
+  Field mapping for the rest of their columns comes from
+  `PaymentBeneficiaries_Inerswitch_MigrationLogic.xlsx.docx` in `src/main/resources/`:
+  - `beneficiary_type` (see `PaymentBeneficiaryTypeMapper`): Malawi → `IWL` only when
+    (`biller_id=5` AND `product_id=69`) OR (`biller_id=7` AND `product_id=10083`), else `BILL`;
+    Botswana → `IWL` when `biller_id` IN (90, 115), else `BILL`; Zimbabwe/Zambia → always `BILL`;
+    blank when the customer's country can't be resolved.
+  - `beneficiary_country` uses the same fixed `IswCountry` lookup as `customer_country_code`.
+  - `nickname` ← `additionalParams.customerName` (unlike `beneficiary_name`, this doesn't fall
+    back to `destinationAccountName`/other JSON keys).
+  - `wallet_type` / `wallet_code` ← `Products.name` / `Products.gatewayCode`, looked up by
+    `product_id`, only for the Malawi/Botswana biller/product combinations above that resolve to
+    `IWL`; blank otherwise.
+  - `biller_name` ← `Billers.name`, looked up by `biller_id`.
+  - `biller_input_value` ← `customerReferece` (sic - that's the actual column name on the source
+    table).
+  - `created_by` / `last_modified_by` ← `SYSTEM`; `last_modified_at` ← the migration run
+    timestamp (same value as `TransferBeneficiaries.created_at`).
 
 ### customer_info (Users)
 

@@ -55,7 +55,7 @@ public final class MigrationCli {
 				if (options.describeSchema()) {
 					SchemaInspector.describe(connection, config);
 				} else {
-					new MigrationRunner(connection, config).run(!options.skipBeneficiaries(), !options.skipCustomers(), !options.skipTransactions());
+					new MigrationRunner(connection, config).run(!options.skipBeneficiaries(), !options.skipCustomers(), !options.skipTransactions(), options.splitByCountry());
 				}
 			}
 			log.info("Done in {} ms", System.currentTimeMillis() - start);
@@ -80,6 +80,10 @@ public final class MigrationCli {
 				+ "  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.\n"
 				+ "  --skip-customers        Don't migrate Users this run.\n"
 				+ "  --skip-transactions     Don't migrate Transactions this run.\n"
+				+ "  --split-by-country      Write beneficiary_details and transaction as one file per country (e.g.\n"
+				+ "                         beneficiary_details_migrated_MW.csv) instead of a single merged file. Rows\n"
+				+ "                         with no resolvable country go to a _UNKNOWN file. customer_info is never\n"
+				+ "                         split (it's grouped by a different, dynamic country lookup).\n"
 				+ "  --describe-schema       Prints the columns found in the Banks, CountryPartner, and Billers tables, then\n"
 				+ "                         exits, without running the migration. Use this first to confirm/adjust the\n"
 				+ "                         banks.column.*, countryPartner.column.*, and billers.column.* overrides in\n"

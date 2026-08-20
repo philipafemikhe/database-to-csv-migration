@@ -18,6 +18,11 @@ public final class OutputRecord {
 		return this;
 	}
 
+	/** The value previously set for this column, or null if it was never set. */
+	public String get(String column) {
+		return values.get(column);
+	}
+
 	public String[] header() {
 		return header;
 	}

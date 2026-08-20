@@ -34,6 +34,7 @@ public final class ArgParser {
 				raw.containsKey("describe-schema"),
 				raw.containsKey("skip-beneficiaries"),
 				raw.containsKey("skip-customers"),
-				raw.containsKey("skip-transactions"));
+				raw.containsKey("skip-transactions"),
+				raw.containsKey("split-by-country"));
 	}
 }

@@ -54,21 +54,25 @@ banks.column.code=code
 banks.wallet.marker=WALLET
 
 # --- Billers table ---
-# Schema isn't documented either; only biller_id -> gatewayCode is needed, to decide a handful of
-# transaction dtype rules (Malawi/Botswana BillPayment). Run --describe-schema to confirm the real
-# column names and adjust if needed.
+# Schema isn't documented either; biller_id -> gatewayCode decides a handful of transaction dtype
+# rules (Malawi/Botswana BillPayment), and biller_id -> name feeds beneficiary_details.biller_name
+# for PaymentBeneficiaries. Run --describe-schema to confirm the real column names and adjust if
+# needed.
 billers.table=dbo.Billers
 billers.column.id=id
 billers.column.gatewayCode=gatewayCode
+billers.column.name=name
 
 # --- Products table ---
-# Schema isn't documented either; only product_id -> gatewayCode is needed, to decide the Malawi
-# AirtimePurchase dtype rule (note: AirtimePurchase keys off product_id/Products, not
-# biller_id/Billers, unlike BillPayment). Run --describe-schema to confirm the real column names
-# and adjust if needed.
+# Schema isn't documented either; product_id -> gatewayCode decides the Malawi AirtimePurchase
+# dtype rule (note: AirtimePurchase keys off product_id/Products, not biller_id/Billers, unlike
+# BillPayment), and product_id -> name/gatewayCode feed beneficiary_details.wallet_type/wallet_code
+# for the Malawi/Botswana PaymentBeneficiaries rows that resolve to IWL. Run --describe-schema to
+# confirm the real column names and adjust if needed.
 products.table=dbo.Products
 products.column.id=id
 products.column.gatewayCode=gatewayCode
+products.column.name=name
 
 # --- CountryPartner table ---
 # Used only for customer_info.country_code / default_country_code, so this must resolve to a

@@ -1,7 +1,7 @@
 package com.example.demo.migration.source;
 
 import com.example.demo.migration.WarningCollector;
-import com.example.demo.migration.csv.CsvWriter;
+import com.example.demo.migration.csv.RecordWriter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.TransferBeneficiaryMapper;
 import com.example.demo.migration.repo.BankBranchesRepository;
@@ -25,7 +25,7 @@ public final class TransferBeneficiarySource {
 	}
 
 	public static int migrate(Connection connection, MigrationConfig config, UsersRepository users, BanksRepository banks,
-			BankBranchesRepository branches, CsvWriter writer, String runTimestamp, WarningCollector warnings) throws SQLException, IOException {
+			BankBranchesRepository branches, RecordWriter writer, String runTimestamp, WarningCollector warnings) throws SQLException, IOException {
 
 		String columns = "id, accountName, accountNumber, bank_id, customer_id, accountCurrency, transactionType, bankBranch_id";
 		Integer limit = config.rowLimit();
