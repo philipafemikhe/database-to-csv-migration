@@ -7,7 +7,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-public record ValidationWarning(String source, long oldId, String message) {
+public final class ValidationWarning {
+
+	private final String source;
+	private final long oldId;
+	private final String message;
+
+	public ValidationWarning(String source, long oldId, String message) {
+		this.source = source;
+		this.oldId = oldId;
+		this.message = message;
+	}
+
+	public String source() {
+		return source;
+	}
+
+	public long oldId() {
+		return oldId;
+	}
+
+	public String message() {
+		return message;
+	}
 
 	@Override
 	public String toString() {

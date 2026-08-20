@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +76,7 @@ public final class MigrationRunner {
 		WarningCollector transferWarnings = new WarningCollector("TransferBeneficiaries");
 		WarningCollector paymentWarnings = new WarningCollector("PaymentBeneficiaries");
 
-		Path outputPath = Path.of(config.outputPath());
+		Path outputPath = Paths.get(config.outputPath());
 		int transferCount;
 		int paymentCount;
 		try (CsvWriter writer = new CsvWriter(outputPath, BeneficiaryDetailsSchema.HEADER)) {
@@ -104,7 +105,7 @@ public final class MigrationRunner {
 		log.info("Loaded Devices={}", devices.size());
 
 		WarningCollector warnings = new WarningCollector("Users");
-		Path outputPath = Path.of(config.customerInfoOutputPath());
+		Path outputPath = Paths.get(config.customerInfoOutputPath());
 		int count;
 		try (CsvWriter writer = new CsvWriter(outputPath, CustomerInfoSchema.HEADER)) {
 			log.info("Migrating Users -> {}", outputPath.toAbsolutePath());
@@ -124,7 +125,7 @@ public final class MigrationRunner {
 		log.info("Loaded Products={}({})", products.size(), products.isAvailable() ? "available" : "UNAVAILABLE");
 
 		WarningCollector warnings = new WarningCollector("Transactions");
-		Path outputPath = Path.of(config.transactionsOutputPath());
+		Path outputPath = Paths.get(config.transactionsOutputPath());
 		int count;
 		try (CsvWriter writer = new CsvWriter(outputPath, TransactionSchema.HEADER)) {
 			log.info("Migrating Transactions -> {}", outputPath.toAbsolutePath());

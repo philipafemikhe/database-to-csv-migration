@@ -8,6 +8,9 @@ import com.example.demo.migration.repo.BanksRepository;
 import com.example.demo.migration.repo.BillersRepository;
 import com.example.demo.migration.repo.ProductsRepository;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -30,7 +33,8 @@ import java.util.Set;
  */
 public final class TransactionDTypeMapper {
 
-	private static final Set<String> MALAWI_BILLPAYMENT_WALLET_GATEWAY_CODES = Set.of("simpo cash", "simpo agent deposits");
+	private static final Set<String> MALAWI_BILLPAYMENT_WALLET_GATEWAY_CODES = Collections.unmodifiableSet(
+			new HashSet<>(Arrays.asList("simpo cash", "simpo agent deposits")));
 	private static final String BOTSWANA_BILLPAYMENT_WALLET_GATEWAY_CODE = "orange-b2c";
 
 	private TransactionDTypeMapper() {
@@ -43,16 +47,19 @@ public final class TransactionDTypeMapper {
 		if (isoTransactionType == null) {
 			return null;
 		}
-		return switch (isoTransactionType.trim().toUpperCase(Locale.ROOT)) {
-			case "LOCALTRANSFER" -> "WIB";
-			case "BILLPAYMENT" -> billPayment(oldId, country, billerId, billers, warnings);
-			case "AIRTIMEPURCHASE" -> airtimePurchase(oldId, country, productId, products, warnings);
-			case "INTERBANKTRANSFER" -> interBankTransfer(oldId, country, destinationBankId, banks, warnings);
-			default -> {
+		switch (isoTransactionType.trim().toUpperCase(Locale.ROOT)) {
+			case "LOCALTRANSFER":
+				return "WIB";
+			case "BILLPAYMENT":
+				return billPayment(oldId, country, billerId, billers, warnings);
+			case "AIRTIMEPURCHASE":
+				return airtimePurchase(oldId, country, productId, products, warnings);
+			case "INTERBANKTRANSFER":
+				return interBankTransfer(oldId, country, destinationBankId, banks, warnings);
+			default:
 				warnings.warn(oldId, "unrecognized transaction DTYPE '" + isoTransactionType + "'; dtype left blank");
-				yield null;
-			}
-		};
+				return null;
+		}
 	}
 
 	private static String billPayment(long oldId, IswCountry country, Long billerId, BillersRepository billers, WarningCollector warnings) {
@@ -82,14 +89,17 @@ public final class TransactionDTypeMapper {
 			warnings.warn(oldId, "Malawi AirtimePurchase has no resolvable Products.gatewayCode for product_id " + productId + "; dtype left blank");
 			return null;
 		}
-		return switch (gatewayCode.toUpperCase(Locale.ROOT)) {
-			case "TNMAIR", "ATLAIR" -> "BILL";
-			case "AIRB2W", "TNMB2W" -> "IWL";
-			default -> {
+		switch (gatewayCode.toUpperCase(Locale.ROOT)) {
+			case "TNMAIR":
+			case "ATLAIR":
+				return "BILL";
+			case "AIRB2W":
+			case "TNMB2W":
+				return "IWL";
+			default:
 				warnings.warn(oldId, "Malawi AirtimePurchase product gateway code '" + gatewayCode + "' not recognized; dtype left blank");
-				yield null;
-			}
-		};
+				return null;
+		}
 	}
 
 	private static String interBankTransfer(long oldId, IswCountry country, Long destinationBankId, BanksRepository banks, WarningCollector warnings) {

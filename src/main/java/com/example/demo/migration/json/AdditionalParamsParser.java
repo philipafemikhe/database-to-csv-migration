@@ -12,7 +12,7 @@ public final class AdditionalParamsParser {
 
 	/** Returns null if the input is null/blank or not valid JSON. */
 	public static JsonNode parse(String additionalParamsJson) {
-		if (additionalParamsJson == null || additionalParamsJson.isBlank()) {
+		if (additionalParamsJson == null || additionalParamsJson.trim().isEmpty()) {
 			return null;
 		}
 		try {
@@ -31,7 +31,7 @@ public final class AdditionalParamsParser {
 			JsonNode v = node.get(key);
 			if (v != null && !v.isNull()) {
 				String text = v.asText();
-				if (text != null && !text.isBlank() && !"null".equalsIgnoreCase(text)) {
+				if (text != null && !text.trim().isEmpty() && !"null".equalsIgnoreCase(text)) {
 					return text;
 				}
 			}

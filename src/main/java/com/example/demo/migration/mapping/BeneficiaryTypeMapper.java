@@ -26,12 +26,17 @@ public final class BeneficiaryTypeMapper {
 			return null;
 		}
 		boolean zambiaInstantWallet = countryIsZambia && bank != null && bank.wallet() && Boolean.TRUE.equals(bank.allowInstantTransfer());
-		return switch (oldTransactionType.trim().toUpperCase(Locale.ROOT)) {
-			case "LOCAL" -> "WIB";
-			case "RTGS" -> "OBR";
-			case "EFT" -> "OBE";
-			case "INSTANT" -> zambiaInstantWallet ? "IWL" : "OBI";
-			default -> null;
-		};
+		switch (oldTransactionType.trim().toUpperCase(Locale.ROOT)) {
+			case "LOCAL":
+				return "WIB";
+			case "RTGS":
+				return "OBR";
+			case "EFT":
+				return "OBE";
+			case "INSTANT":
+				return zambiaInstantWallet ? "IWL" : "OBI";
+			default:
+				return null;
+		}
 	}
 }

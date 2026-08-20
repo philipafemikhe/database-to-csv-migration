@@ -7,7 +7,7 @@ import com.example.demo.migration.db.MigrationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 
 /**
@@ -36,7 +36,7 @@ public final class MigrationCli {
 			return;
 		}
 
-		if (options.configPath().isEmpty()) {
+		if (!options.configPath().isPresent()) {
 			log.error("Missing required --config=<path/to/migration.properties>");
 			printUsage();
 			System.exit(1);
@@ -45,7 +45,7 @@ public final class MigrationCli {
 
 		long start = System.currentTimeMillis();
 		try {
-			MigrationConfig config = MigrationConfig.load(Path.of(options.configPath().get()));
+			MigrationConfig config = MigrationConfig.load(Paths.get(options.configPath().get()));
 			options.output().ifPresent(v -> config.override("output", v));
 			options.outputCustomers().ifPresent(v -> config.override("output.customerInfo", v));
 			options.outputTransactions().ifPresent(v -> config.override("output.transactions", v));
@@ -66,24 +66,23 @@ public final class MigrationCli {
 	}
 
 	private static void printUsage() {
-		System.out.println("""
-				Usage:
-				  java -jar beneficiary-migration.jar --config=migration.properties [options]
-				  java -jar beneficiary-migration.jar --config=migration.properties --describe-schema
-
-				  --config              Path to a properties file with db.url/db.username/db.password and other settings.
-				                         See migration.properties.example for the full list.
-				  --output               Overrides 'output': where to write beneficiary_details.csv.
-				  --output-customers      Overrides 'output.customerInfo': where to write customer_info.csv.
-				  --output-transactions   Overrides 'output.transactions': where to write transaction.csv.
-				  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).
-				  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.
-				  --skip-customers        Don't migrate Users this run.
-				  --skip-transactions     Don't migrate Transactions this run.
-				  --describe-schema       Prints the columns found in the Banks, CountryPartner, and Billers tables, then
-				                         exits, without running the migration. Use this first to confirm/adjust the
-				                         banks.column.*, countryPartner.column.*, and billers.column.* overrides in
-				                         your config file.
-				""");
+		System.out.println(
+				"Usage:\n"
+				+ "  java -jar beneficiary-migration.jar --config=migration.properties [options]\n"
+				+ "  java -jar beneficiary-migration.jar --config=migration.properties --describe-schema\n"
+				+ "\n"
+				+ "  --config              Path to a properties file with db.url/db.username/db.password and other settings.\n"
+				+ "                         See migration.properties.example for the full list.\n"
+				+ "  --output               Overrides 'output': where to write beneficiary_details.csv.\n"
+				+ "  --output-customers      Overrides 'output.customerInfo': where to write customer_info.csv.\n"
+				+ "  --output-transactions   Overrides 'output.transactions': where to write transaction.csv.\n"
+				+ "  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).\n"
+				+ "  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.\n"
+				+ "  --skip-customers        Don't migrate Users this run.\n"
+				+ "  --skip-transactions     Don't migrate Transactions this run.\n"
+				+ "  --describe-schema       Prints the columns found in the Banks, CountryPartner, and Billers tables, then\n"
+				+ "                         exits, without running the migration. Use this first to confirm/adjust the\n"
+				+ "                         banks.column.*, countryPartner.column.*, and billers.column.* overrides in\n"
+				+ "                         your config file.\n");
 	}
 }

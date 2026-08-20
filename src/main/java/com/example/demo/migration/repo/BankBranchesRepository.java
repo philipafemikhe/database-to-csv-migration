@@ -55,7 +55,7 @@ public final class BankBranchesRepository {
 	 * digits-only comparison to tolerate letter-prefixed codes like "B024".
 	 */
 	public BankBranchRecord findByCodePrefix(String prefix) {
-		if (prefix == null || prefix.isBlank()) {
+		if (prefix == null || prefix.trim().isEmpty()) {
 			return null;
 		}
 		BankBranchRecord exact = byRawCode.get(prefix.toUpperCase(Locale.ROOT));

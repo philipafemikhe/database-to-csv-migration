@@ -55,17 +55,18 @@ class MigrationIntegrationTest {
 		seedSchema();
 
 		Path propsFile = tempDir.resolve("migration.properties");
-		Files.writeString(propsFile, """
-				db.url=%s
-				banks.column.id=bankId
-				banks.column.name=bankName
-				banks.column.swiftCode=swift
-				banks.column.institution=instType
-				banks.column.allowInstantTransfer=instantOk
-				banks.column.code=bcode
-				countryPartner.column.id=countryId
-				countryPartner.column.name=label
-				""".formatted(connection.getMetaData().getURL()), StandardCharsets.UTF_8);
+		String propsContent = String.format(
+				"db.url=%s\n"
+				+ "banks.column.id=bankId\n"
+				+ "banks.column.name=bankName\n"
+				+ "banks.column.swiftCode=swift\n"
+				+ "banks.column.institution=instType\n"
+				+ "banks.column.allowInstantTransfer=instantOk\n"
+				+ "banks.column.code=bcode\n"
+				+ "countryPartner.column.id=countryId\n"
+				+ "countryPartner.column.name=label\n",
+				connection.getMetaData().getURL());
+		Files.write(propsFile, propsContent.getBytes(StandardCharsets.UTF_8));
 		config = MigrationConfig.load(propsFile);
 	}
 
@@ -81,156 +82,133 @@ class MigrationIntegrationTest {
 			st.execute("CREATE TABLE dbo.CountryPartner (countryId BIGINT, label VARCHAR(50))");
 			st.execute("INSERT INTO dbo.CountryPartner VALUES (1, 'Botswana'), (2, 'Zambia'), (3, 'Malawi')");
 
-			st.execute("""
-					CREATE TABLE dbo.Users (
-					  id BIGINT, userName VARCHAR(50), country_id BIGINT, mobileNumber VARCHAR(30),
-					  primaryAccountNumber VARCHAR(30), dateRegistered TIMESTAMP, lastLogin TIMESTAMP,
-					  ussdLastLogin TIMESTAMP, defaultLanguage VARCHAR(20), timeToBeginTransact TIMESTAMP,
-					  registrationMode VARCHAR(20), hasMobile BOOLEAN, hasUssd BOOLEAN, loginDisabled BOOLEAN,
-					  isDeleted BOOLEAN, migratedPin BOOLEAN, ussdDisabled BOOLEAN, imsinumber VARCHAR(30),
-					  reasonForProfileDeletion VARCHAR(100), profileDeletionDate TIMESTAMP
-					)""");
-			st.execute("""
-					INSERT INTO dbo.Users VALUES
-					  (100, 'R000100', 1, '26772754869', '0044501047348', '2026-06-16 13:05:21.865', NULL, NULL,
-					   'ENGLISH', NULL, 'OTP', TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL),
-					  (200, 'R000200', 2, '260973641672', '9998887776', '2026-05-01 08:00:00.000',
-					   '2026-07-01 09:00:00.000', NULL, NULL, NULL, 'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, TRUE,
-					   '650109169194084', NULL, NULL),
-					  (300, 'R000300', 3, '265994885882', '1125501060384', '2026-06-03 16:01:24.863', NULL, NULL,
-					   'FR', NULL, 'OTP', TRUE, TRUE, TRUE, FALSE, TRUE, FALSE, NULL, NULL, NULL),
-					  (400, 'R000400', 888, '26770000000', NULL, '2026-01-01 00:00:00.000', NULL, NULL, NULL, NULL,
-					   'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL),
-					  (250, 'R000250', 4, '260971111111', NULL, '2026-07-01 00:00:00.000', NULL, NULL, NULL, NULL,
-					   'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL)
-					""");
+			st.execute("CREATE TABLE dbo.Users (\n"
+					+ "  id BIGINT, userName VARCHAR(50), country_id BIGINT, mobileNumber VARCHAR(30),\n"
+					+ "  primaryAccountNumber VARCHAR(30), dateRegistered TIMESTAMP, lastLogin TIMESTAMP,\n"
+					+ "  ussdLastLogin TIMESTAMP, defaultLanguage VARCHAR(20), timeToBeginTransact TIMESTAMP,\n"
+					+ "  registrationMode VARCHAR(20), hasMobile BOOLEAN, hasUssd BOOLEAN, loginDisabled BOOLEAN,\n"
+					+ "  isDeleted BOOLEAN, migratedPin BOOLEAN, ussdDisabled BOOLEAN, imsinumber VARCHAR(30),\n"
+					+ "  reasonForProfileDeletion VARCHAR(100), profileDeletionDate TIMESTAMP\n"
+					+ ")");
+			st.execute("INSERT INTO dbo.Users VALUES\n"
+					+ "  (100, 'R000100', 1, '26772754869', '0044501047348', '2026-06-16 13:05:21.865', NULL, NULL,\n"
+					+ "   'ENGLISH', NULL, 'OTP', TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL),\n"
+					+ "  (200, 'R000200', 2, '260973641672', '9998887776', '2026-05-01 08:00:00.000',\n"
+					+ "   '2026-07-01 09:00:00.000', NULL, NULL, NULL, 'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, TRUE,\n"
+					+ "   '650109169194084', NULL, NULL),\n"
+					+ "  (300, 'R000300', 3, '265994885882', '1125501060384', '2026-06-03 16:01:24.863', NULL, NULL,\n"
+					+ "   'FR', NULL, 'OTP', TRUE, TRUE, TRUE, FALSE, TRUE, FALSE, NULL, NULL, NULL),\n"
+					+ "  (400, 'R000400', 888, '26770000000', NULL, '2026-01-01 00:00:00.000', NULL, NULL, NULL, NULL,\n"
+					+ "   'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL),\n"
+					+ "  (250, 'R000250', 4, '260971111111', NULL, '2026-07-01 00:00:00.000', NULL, NULL, NULL, NULL,\n"
+					+ "   'OTP', TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NULL, NULL, NULL)\n");
 
 			st.execute("CREATE TABLE dbo.Banks (bankId BIGINT, bankName VARCHAR(100), swift VARCHAR(20), instType VARCHAR(20), instantOk BOOLEAN, bcode VARCHAR(20))");
-			st.execute("""
-					INSERT INTO dbo.Banks VALUES
-					  (88, 'First National Bank Botswana', 'FIRNBWGX', 'BANK', NULL, 'FNBB'),
-					  (114, 'Airtel Money', NULL, 'WALLET', FALSE, 'ZM-AIRTEL'),
-					  (115, 'Zamtel Wallet', NULL, 'WALLET', TRUE, 'ZM-ZAMTEL'),
-					  (21, 'Standard Chartered Zambia', 'SCBLZMLX', 'BANK', TRUE, 'SCBZM'),
-					  (22, 'Zambia National Commercial Bank', 'ZNCOZMLX', 'BANK', FALSE, 'ZNCO'),
-					  (200, 'Malawi Instant Bank', 'MWIXXXXX', 'BANK', TRUE, 'MWINSTANT'),
-					  (201, 'Malawi Standard Bank', 'MWSTXXXX', 'BANK', FALSE, 'MWSTD')
-					""");
+			st.execute("INSERT INTO dbo.Banks VALUES\n"
+					+ "  (88, 'First National Bank Botswana', 'FIRNBWGX', 'BANK', NULL, 'FNBB'),\n"
+					+ "  (114, 'Airtel Money', NULL, 'WALLET', FALSE, 'ZM-AIRTEL'),\n"
+					+ "  (115, 'Zamtel Wallet', NULL, 'WALLET', TRUE, 'ZM-ZAMTEL'),\n"
+					+ "  (21, 'Standard Chartered Zambia', 'SCBLZMLX', 'BANK', TRUE, 'SCBZM'),\n"
+					+ "  (22, 'Zambia National Commercial Bank', 'ZNCOZMLX', 'BANK', FALSE, 'ZNCO'),\n"
+					+ "  (200, 'Malawi Instant Bank', 'MWIXXXXX', 'BANK', TRUE, 'MWINSTANT'),\n"
+					+ "  (201, 'Malawi Standard Bank', 'MWSTXXXX', 'BANK', FALSE, 'MWSTD')\n");
 
 			st.execute("CREATE TABLE dbo.Billers (id BIGINT, gatewayCode VARCHAR(50))");
-			st.execute("""
-					INSERT INTO dbo.Billers VALUES
-					  (10, 'Simpo Cash'),
-					  (11, 'Random Biller'),
-					  (12, 'Orange-B2C'),
-					  (13, 'Other BW Biller')
-					""");
+			st.execute("INSERT INTO dbo.Billers VALUES\n"
+					+ "  (10, 'Simpo Cash'),\n"
+					+ "  (11, 'Random Biller'),\n"
+					+ "  (12, 'Orange-B2C'),\n"
+					+ "  (13, 'Other BW Biller')\n");
 
 			st.execute("CREATE TABLE dbo.Products (id BIGINT, gatewayCode VARCHAR(50))");
-			st.execute("""
-					INSERT INTO dbo.Products VALUES
-					  (14, 'TNMAIR'),
-					  (15, 'AIRB2W'),
-					  (16, 'UNKNOWNCODE')
-					""");
+			st.execute("INSERT INTO dbo.Products VALUES\n"
+					+ "  (14, 'TNMAIR'),\n"
+					+ "  (15, 'AIRB2W'),\n"
+					+ "  (16, 'UNKNOWNCODE')\n");
 
 			st.execute("CREATE TABLE dbo.BankBranches (id BIGINT, name VARCHAR(100), bank_id BIGINT, code VARCHAR(20), gatewayCode VARCHAR(20))");
-			st.execute("""
-					INSERT INTO dbo.BankBranches VALUES
-					  (27, 'FRANCISTOWN(2917)', 88, 'B027', '2917'),
-					  (99, 'SOME OTHER BRANCH', 999, 'B099', '9901'),
-					  (500, 'PURE DIGIT CODE BRANCH', 88, '004', '5001'),
-					  (501, 'LETTER PREFIX CODE BRANCH', 88, 'B112', '5011')
-					""");
+			st.execute("INSERT INTO dbo.BankBranches VALUES\n"
+					+ "  (27, 'FRANCISTOWN(2917)', 88, 'B027', '2917'),\n"
+					+ "  (99, 'SOME OTHER BRANCH', 999, 'B099', '9901'),\n"
+					+ "  (500, 'PURE DIGIT CODE BRANCH', 88, '004', '5001'),\n"
+					+ "  (501, 'LETTER PREFIX CODE BRANCH', 88, 'B112', '5011')\n");
 
-			st.execute("""
-					CREATE TABLE dbo.Devices (
-					  id BIGINT, uuid VARCHAR(64), customer_id BIGINT, registrationCompleted TIMESTAMP,
-					  registrationStarted TIMESTAMP, active BOOLEAN
-					)""");
-			st.execute("""
-					INSERT INTO dbo.Devices VALUES
-					  (1, 'DEVICE-UUID-100', 100, '2026-06-16 13:06:00.000', '2026-06-16 13:05:00.000', TRUE),
-					  (2, 'OLD-INACTIVE', 300, '2026-07-01 00:00:00.000', '2026-07-01 00:00:00.000', FALSE),
-					  (3, 'ACTIVE-DEVICE', 300, '2026-06-01 00:00:00.000', '2026-06-01 00:00:00.000', TRUE)
-					""");
+			st.execute("CREATE TABLE dbo.Devices (\n"
+					+ "  id BIGINT, uuid VARCHAR(64), customer_id BIGINT, registrationCompleted TIMESTAMP,\n"
+					+ "  registrationStarted TIMESTAMP, active BOOLEAN\n"
+					+ ")");
+			st.execute("INSERT INTO dbo.Devices VALUES\n"
+					+ "  (1, 'DEVICE-UUID-100', 100, '2026-06-16 13:06:00.000', '2026-06-16 13:05:00.000', TRUE),\n"
+					+ "  (2, 'OLD-INACTIVE', 300, '2026-07-01 00:00:00.000', '2026-07-01 00:00:00.000', FALSE),\n"
+					+ "  (3, 'ACTIVE-DEVICE', 300, '2026-06-01 00:00:00.000', '2026-06-01 00:00:00.000', TRUE)\n");
 
-			st.execute("""
-					CREATE TABLE dbo.TransferBeneficiaries (
-					  id BIGINT, accountName VARCHAR(100), accountNumber VARCHAR(50), bank_id BIGINT,
-					  customer_id BIGINT, accountCurrency VARCHAR(10), transactionType VARCHAR(20), bankBranch_id BIGINT
-					)""");
-			st.execute("""
-					INSERT INTO dbo.TransferBeneficiaries VALUES
-					  (1, 'Cable Masters', '1810264', 88, 200, 'BWP', 'EFT', 27),
-					  (2, 'Mismatch Case', '555', 88, 200, 'BWP', 'EFT', 99),
-					  (3, 'No Branch Case', '777', 88, 200, 'BWP', 'EFT', NULL),
-					  (4, 'Zambia Wallet Instant Guy', '111', 115, 250, 'ZMW', 'INSTANT', NULL),
-					  (5, 'Zambia Wallet NoFlag Guy', '112', 114, 250, 'ZMW', 'INSTANT', NULL),
-					  (6, 'Zambia NonWallet Instant Guy', '222', 21, 250, 'ZMW', 'INSTANT', NULL),
-					  (7, 'Zambia RTGS Guy', '333', 21, 250, 'ZMW', 'RTGS', NULL),
-					  (8, 'Malawi RTGS Guy', '444', 88, 100, 'MWK', 'RTGS', NULL),
-					  (9, 'Malawi Instant Guy', '555', 200, 100, 'MWK', 'INSTANT', NULL),
-					  (10, 'Malawi Local Guy', '666', NULL, 100, 'MWK', 'LOCAL', NULL),
-					  (11, 'Unknown Type', '777', 88, 300, 'MWK', 'WEIRD', NULL),
-					  (12, 'Unresolved Customer', '888', 88, 999, 'MWK', 'LOCAL', NULL)
-					""");
+			st.execute("CREATE TABLE dbo.TransferBeneficiaries (\n"
+					+ "  id BIGINT, accountName VARCHAR(100), accountNumber VARCHAR(50), bank_id BIGINT,\n"
+					+ "  customer_id BIGINT, accountCurrency VARCHAR(10), transactionType VARCHAR(20), bankBranch_id BIGINT\n"
+					+ ")");
+			st.execute("INSERT INTO dbo.TransferBeneficiaries VALUES\n"
+					+ "  (1, 'Cable Masters', '1810264', 88, 200, 'BWP', 'EFT', 27),\n"
+					+ "  (2, 'Mismatch Case', '555', 88, 200, 'BWP', 'EFT', 99),\n"
+					+ "  (3, 'No Branch Case', '777', 88, 200, 'BWP', 'EFT', NULL),\n"
+					+ "  (4, 'Zambia Wallet Instant Guy', '111', 115, 250, 'ZMW', 'INSTANT', NULL),\n"
+					+ "  (5, 'Zambia Wallet NoFlag Guy', '112', 114, 250, 'ZMW', 'INSTANT', NULL),\n"
+					+ "  (6, 'Zambia NonWallet Instant Guy', '222', 21, 250, 'ZMW', 'INSTANT', NULL),\n"
+					+ "  (7, 'Zambia RTGS Guy', '333', 21, 250, 'ZMW', 'RTGS', NULL),\n"
+					+ "  (8, 'Malawi RTGS Guy', '444', 88, 100, 'MWK', 'RTGS', NULL),\n"
+					+ "  (9, 'Malawi Instant Guy', '555', 200, 100, 'MWK', 'INSTANT', NULL),\n"
+					+ "  (10, 'Malawi Local Guy', '666', NULL, 100, 'MWK', 'LOCAL', NULL),\n"
+					+ "  (11, 'Unknown Type', '777', 88, 300, 'MWK', 'WEIRD', NULL),\n"
+					+ "  (12, 'Unresolved Customer', '888', 88, 999, 'MWK', 'LOCAL', NULL)\n");
 
-			st.execute("""
-					CREATE TABLE dbo.PaymentBeneficiaries (
-					  id BIGINT, additionalParams VARCHAR(2000), customer_id BIGINT, biller_id BIGINT,
-					  quickPay BOOLEAN, createDate TIMESTAMP, destinationAccountNumber VARCHAR(50), destinationAccountName VARCHAR(100)
-					)""");
-			st.execute("""
-					INSERT INTO dbo.PaymentBeneficiaries VALUES
-					  (500, '{"userName":"R0498292","accountNumber":"0001503165339","currencyCode":"MWK","customerName":"EMMANUEL KALULU"}',
-					   300, 5, FALSE, '2026-03-20 14:05:38.456', NULL, NULL),
-					  (501, '{"userName":"R0512210","toAccountName":"Nathan Direct","accountNumber":"999","currencyCode":"MWK"}',
-					   300, 6, TRUE, '2026-03-23 08:57:08.711', '8888', 'Override Name'),
-					  (502, 'not-json', 999, 7, FALSE, '2026-01-01 00:00:00.000', NULL, NULL)
-					""");
+			st.execute("CREATE TABLE dbo.PaymentBeneficiaries (\n"
+					+ "  id BIGINT, additionalParams VARCHAR(2000), customer_id BIGINT, biller_id BIGINT,\n"
+					+ "  quickPay BOOLEAN, createDate TIMESTAMP, destinationAccountNumber VARCHAR(50), destinationAccountName VARCHAR(100)\n"
+					+ ")");
+			st.execute("INSERT INTO dbo.PaymentBeneficiaries VALUES\n"
+					+ "  (500, '{\"userName\":\"R0498292\",\"accountNumber\":\"0001503165339\",\"currencyCode\":\"MWK\",\"customerName\":\"EMMANUEL KALULU\"}',\n"
+					+ "   300, 5, FALSE, '2026-03-20 14:05:38.456', NULL, NULL),\n"
+					+ "  (501, '{\"userName\":\"R0512210\",\"toAccountName\":\"Nathan Direct\",\"accountNumber\":\"999\",\"currencyCode\":\"MWK\"}',\n"
+					+ "   300, 6, TRUE, '2026-03-23 08:57:08.711', '8888', 'Override Name'),\n"
+					+ "  (502, 'not-json', 999, 7, FALSE, '2026-01-01 00:00:00.000', NULL, NULL)\n");
 
-			st.execute("""
-					CREATE TABLE dbo.Transactions (
-					  DTYPE VARCHAR(30), id BIGINT, amount NUMERIC(19,2), charge NUMERIC(19,2), bankReference VARCHAR(255),
-					  deviceUUID VARCHAR(255), narration VARCHAR(255), sourceAccount VARCHAR(255), status VARCHAR(255),
-					  statusCode VARCHAR(255), statusDescription VARCHAR(255), transactionDate TIMESTAMP,
-					  destinationAccount VARCHAR(255), transferProcessor VARCHAR(255), customerReference VARCHAR(255),
-					  finalResponseCode VARCHAR(255), gatewayReference VARCHAR(255), initialResponseCode VARCHAR(255),
-					  customer_id BIGINT, destinationBank_id BIGINT, biller_id BIGINT, product_id BIGINT,
-					  phoneNumber VARCHAR(255), country_id BIGINT, receiptNo VARCHAR(255), tokens VARCHAR(255),
-					  destinationAccountName VARCHAR(255), channel VARCHAR(255), user_id BIGINT, sourceAccountCurrency VARCHAR(50)
-					)""");
-			st.execute("""
-					INSERT INTO dbo.Transactions
-					  (DTYPE, id, amount, charge, customer_id, destinationBank_id, biller_id, product_id, country_id, user_id, sourceAccountCurrency)
-					VALUES
-					  ('LocalTransfer', 9001, 100.50, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),
-					  ('BillPayment', 9002, 500, 0, 100, NULL, 10, NULL, 1, 100, 'MWK'),
-					  ('BillPayment', 9003, 500, 0, 100, NULL, 11, NULL, 1, 100, 'MWK'),
-					  ('BillPayment', 9004, 500, 0, 100, NULL, 12, NULL, 2, 100, 'BWP'),
-					  ('BillPayment', 9005, 500, 0, 100, NULL, 13, NULL, 2, 100, 'BWP'),
-					  ('BillPayment', 9006, 500, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),
-					  ('BillPayment', 9007, 500, 0, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),
-					  ('AirtimePurchase', 9008, 100, NULL, 100, NULL, NULL, 14, 1, 100, 'MWK'),
-					  ('AirtimePurchase', 9009, 100, NULL, 100, NULL, NULL, 15, 1, 100, 'MWK'),
-					  ('AirtimePurchase', 9010, 100, NULL, 100, NULL, NULL, 16, 1, 100, 'MWK'),
-					  ('AirtimePurchase', 9011, 100, NULL, 100, NULL, NULL, NULL, 2, 100, 'BWP'),
-					  ('AirtimePurchase', 9012, 100, NULL, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),
-					  ('AirtimePurchase', 9013, 100, NULL, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),
-					  ('InterBankTransfer', 9014, 1000, 0, 100, 200, NULL, NULL, 1, 100, 'MWK'),
-					  ('InterBankTransfer', 9015, 1000, 0, 100, 201, NULL, NULL, 1, 100, 'MWK'),
-					  ('InterBankTransfer', 9016, 1000, 0, 100, 88, NULL, NULL, 2, 100, 'BWP'),
-					  ('InterBankTransfer', 9017, 1000, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),
-					  ('InterBankTransfer', 9018, 1000, 0, 100, 88, NULL, NULL, 3, 100, 'ZWG'),
-					  ('InterBankTransfer', 9019, 1000, 0, 100, 114, NULL, NULL, 4, 100, 'ZMW'),
-					  ('InterBankTransfer', 9020, 1000, 0, 100, 21, NULL, NULL, 4, 100, 'ZMW'),
-					  ('InterBankTransfer', 9021, 1000, 0, 100, 22, NULL, NULL, 4, 100, 'ZMW'),
-					  ('WeirdType', 9022, 1000, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),
-					  ('LocalTransfer', 9023, 100, 0, 999, NULL, NULL, NULL, 1, 100, 'MWK'),
-					  ('LocalTransfer', 9024, 100, 0, 100, NULL, NULL, NULL, 99, 100, 'MWK'),
-					  ('InterBankTransfer', 9025, 1000, 0, 100, 987654, NULL, NULL, 1, 100, 'MWK')
-					""");
+			st.execute("CREATE TABLE dbo.Transactions (\n"
+					+ "  DTYPE VARCHAR(30), id BIGINT, amount NUMERIC(19,2), charge NUMERIC(19,2), bankReference VARCHAR(255),\n"
+					+ "  deviceUUID VARCHAR(255), narration VARCHAR(255), sourceAccount VARCHAR(255), status VARCHAR(255),\n"
+					+ "  statusCode VARCHAR(255), statusDescription VARCHAR(255), transactionDate TIMESTAMP,\n"
+					+ "  destinationAccount VARCHAR(255), transferProcessor VARCHAR(255), customerReference VARCHAR(255),\n"
+					+ "  finalResponseCode VARCHAR(255), gatewayReference VARCHAR(255), initialResponseCode VARCHAR(255),\n"
+					+ "  customer_id BIGINT, destinationBank_id BIGINT, biller_id BIGINT, product_id BIGINT,\n"
+					+ "  phoneNumber VARCHAR(255), country_id BIGINT, receiptNo VARCHAR(255), tokens VARCHAR(255),\n"
+					+ "  destinationAccountName VARCHAR(255), channel VARCHAR(255), user_id BIGINT, sourceAccountCurrency VARCHAR(50)\n"
+					+ ")");
+			st.execute("INSERT INTO dbo.Transactions\n"
+					+ "  (DTYPE, id, amount, charge, customer_id, destinationBank_id, biller_id, product_id, country_id, user_id, sourceAccountCurrency)\n"
+					+ "VALUES\n"
+					+ "  ('LocalTransfer', 9001, 100.50, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('BillPayment', 9002, 500, 0, 100, NULL, 10, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('BillPayment', 9003, 500, 0, 100, NULL, 11, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('BillPayment', 9004, 500, 0, 100, NULL, 12, NULL, 2, 100, 'BWP'),\n"
+					+ "  ('BillPayment', 9005, 500, 0, 100, NULL, 13, NULL, 2, 100, 'BWP'),\n"
+					+ "  ('BillPayment', 9006, 500, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),\n"
+					+ "  ('BillPayment', 9007, 500, 0, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),\n"
+					+ "  ('AirtimePurchase', 9008, 100, NULL, 100, NULL, NULL, 14, 1, 100, 'MWK'),\n"
+					+ "  ('AirtimePurchase', 9009, 100, NULL, 100, NULL, NULL, 15, 1, 100, 'MWK'),\n"
+					+ "  ('AirtimePurchase', 9010, 100, NULL, 100, NULL, NULL, 16, 1, 100, 'MWK'),\n"
+					+ "  ('AirtimePurchase', 9011, 100, NULL, 100, NULL, NULL, NULL, 2, 100, 'BWP'),\n"
+					+ "  ('AirtimePurchase', 9012, 100, NULL, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),\n"
+					+ "  ('AirtimePurchase', 9013, 100, NULL, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),\n"
+					+ "  ('InterBankTransfer', 9014, 1000, 0, 100, 200, NULL, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('InterBankTransfer', 9015, 1000, 0, 100, 201, NULL, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('InterBankTransfer', 9016, 1000, 0, 100, 88, NULL, NULL, 2, 100, 'BWP'),\n"
+					+ "  ('InterBankTransfer', 9017, 1000, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),\n"
+					+ "  ('InterBankTransfer', 9018, 1000, 0, 100, 88, NULL, NULL, 3, 100, 'ZWG'),\n"
+					+ "  ('InterBankTransfer', 9019, 1000, 0, 100, 114, NULL, NULL, 4, 100, 'ZMW'),\n"
+					+ "  ('InterBankTransfer', 9020, 1000, 0, 100, 21, NULL, NULL, 4, 100, 'ZMW'),\n"
+					+ "  ('InterBankTransfer', 9021, 1000, 0, 100, 22, NULL, NULL, 4, 100, 'ZMW'),\n"
+					+ "  ('WeirdType', 9022, 1000, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('LocalTransfer', 9023, 100, 0, 999, NULL, NULL, NULL, 1, 100, 'MWK'),\n"
+					+ "  ('LocalTransfer', 9024, 100, 0, 100, NULL, NULL, NULL, 99, 100, 'MWK'),\n"
+					+ "  ('InterBankTransfer', 9025, 1000, 0, 100, 987654, NULL, NULL, 1, 100, 'MWK')\n");
 		}
 	}
 
@@ -553,22 +531,19 @@ class MigrationIntegrationTest {
 		try (Connection conn = DriverManager.getConnection("jdbc:h2:mem:banksdefaults_" + System.nanoTime() + ";DB_CLOSE_DELAY=-1")) {
 			try (Statement st = conn.createStatement()) {
 				st.execute("CREATE SCHEMA dbo");
-				st.execute("""
-						CREATE TABLE dbo.Banks (
-						  id BIGINT, code VARCHAR(20), deleted BOOLEAN, enabled BOOLEAN, gatewayCode VARCHAR(20),
-						  name VARCHAR(100), processor VARCHAR(20), country_id BIGINT, routingNumber VARCHAR(20),
-						  bankIBRefNumber VARCHAR(20), branchCode VARCHAR(20), hasBranches BOOLEAN,
-						  allowsInstantTransfer BOOLEAN, institution VARCHAR(20), shortName VARCHAR(100)
-						)""");
-				st.execute("""
-						INSERT INTO dbo.Banks VALUES
-						  (1, 'B001', FALSE, TRUE, 'FMERMWMW', 'FIRST MERCHANT BANK', 'NATIVE', 1, 'FMERMWMW', NULL, NULL, FALSE, FALSE, 'BANK', 'FIRST MERCHANT BANK'),
-						  (114, 'ZM-NFS-AIRTEL', FALSE, TRUE, NULL, 'AIRTEL', 'NATIVE', 4, NULL, NULL, NULL, TRUE, TRUE, 'WALLET', 'AIRTEL')
-						""");
+				st.execute("CREATE TABLE dbo.Banks (\n"
+						+ "  id BIGINT, code VARCHAR(20), deleted BOOLEAN, enabled BOOLEAN, gatewayCode VARCHAR(20),\n"
+						+ "  name VARCHAR(100), processor VARCHAR(20), country_id BIGINT, routingNumber VARCHAR(20),\n"
+						+ "  bankIBRefNumber VARCHAR(20), branchCode VARCHAR(20), hasBranches BOOLEAN,\n"
+						+ "  allowsInstantTransfer BOOLEAN, institution VARCHAR(20), shortName VARCHAR(100)\n"
+						+ ")");
+				st.execute("INSERT INTO dbo.Banks VALUES\n"
+						+ "  (1, 'B001', FALSE, TRUE, 'FMERMWMW', 'FIRST MERCHANT BANK', 'NATIVE', 1, 'FMERMWMW', NULL, NULL, FALSE, FALSE, 'BANK', 'FIRST MERCHANT BANK'),\n"
+						+ "  (114, 'ZM-NFS-AIRTEL', FALSE, TRUE, NULL, 'AIRTEL', 'NATIVE', 4, NULL, NULL, NULL, TRUE, TRUE, 'WALLET', 'AIRTEL')\n");
 			}
 
 			Path propsFile = tempDir.resolve("banks-defaults.properties");
-			Files.writeString(propsFile, "db.url=" + conn.getMetaData().getURL() + "\n", StandardCharsets.UTF_8);
+			Files.write(propsFile, ("db.url=" + conn.getMetaData().getURL() + "\n").getBytes(StandardCharsets.UTF_8));
 			MigrationConfig defaultConfig = MigrationConfig.load(propsFile);
 
 			BanksRepository banks = BanksRepository.load(conn, defaultConfig);

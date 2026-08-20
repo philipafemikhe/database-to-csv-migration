@@ -49,7 +49,7 @@ public final class MigrationConfig {
 
 	private String require(String key) {
 		String v = props.getProperty(key);
-		if (v == null || v.isBlank()) {
+		if (v == null || v.trim().isEmpty()) {
 			throw new IllegalStateException("Missing required config property: " + key);
 		}
 		return v;
