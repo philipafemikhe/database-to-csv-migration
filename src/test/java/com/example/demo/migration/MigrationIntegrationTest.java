@@ -123,7 +123,9 @@ class MigrationIntegrationTest {
 					+ "  (5, 'ESCOMPAY', 'ESCOM'),\n"
 					+ "  (7, 'WBPAY', 'Water Board'),\n"
 					+ "  (90, 'ORANGEPAY', 'Orange Money'),\n"
-					+ "  (115, 'MASCOMPAY', 'Mascom MyZaka')\n");
+					+ "  (115, 'MASCOMPAY', 'Mascom MyZaka'),\n"
+					+ "  (32, 'MW-ESCOMGW', 'ESCOM GW Biller'),\n"
+					+ "  (95, 'ZW-UTILITY', 'Zimbabwe Utility Biller')\n");
 
 			st.execute("CREATE TABLE dbo.Products (id BIGINT, gatewayCode VARCHAR(50), name VARCHAR(100))");
 			st.execute("INSERT INTO dbo.Products VALUES\n"
@@ -189,7 +191,15 @@ class MigrationIntegrationTest {
 					+ "  (506, '{\"userName\":\"R000200\",\"customerName\":\"BOTSWANA NONWALLET GUY\",\"currencyCode\":\"BWP\"}',\n"
 					+ "   200, 12, NULL, FALSE, '2026-04-04 00:00:00.000', NULL, NULL, NULL),\n"
 					+ "  (507, '{\"userName\":\"R000250\",\"customerName\":\"ZAMBIA GUY\",\"currencyCode\":\"ZMW\"}',\n"
-					+ "   250, 10, NULL, FALSE, '2026-04-05 00:00:00.000', NULL, NULL, NULL)\n");
+					+ "   250, 10, NULL, FALSE, '2026-04-05 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (508, '{\"userName\":\"R000100\",\"customerName\":\"MALAWI GW GUY\",\"currencyCode\":\"MWK\",\"productGatewayCode\":\"MW-ESCOM-GW-42\"}',\n"
+					+ "   100, 32, NULL, FALSE, '2026-04-06 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (509, '{\"userName\":\"R000300\",\"customerName\":\"ZIMBABWE DOMESTIC GUY\",\"currencyCode\":\"ZWG\"}',\n"
+					+ "   300, 95, 10209, FALSE, '2026-04-07 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (510, '{\"userName\":\"R000300\",\"customerName\":\"ZIMBABWE CUSTOM GUY\",\"currencyCode\":\"ZWG\"}',\n"
+					+ "   300, 95, 10208, FALSE, '2026-04-08 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (511, '{\"userName\":\"R000300\",\"customerName\":\"ZIMBABWE UTILITY GUY\",\"currencyCode\":\"ZWG\",\"utilityType\":\"Commercial\"}',\n"
+					+ "   300, 95, NULL, FALSE, '2026-04-09 00:00:00.000', NULL, NULL, NULL)\n");
 
 			st.execute("CREATE TABLE dbo.Transactions (\n"
 					+ "  DTYPE VARCHAR(30), id BIGINT, amount NUMERIC(19,2), charge NUMERIC(19,2), bankReference VARCHAR(255),\n"
@@ -243,7 +253,7 @@ class MigrationIntegrationTest {
 		assertTrue(banks.isAvailable());
 		assertEquals(7, banks.size());
 		assertTrue(billers.isAvailable());
-		assertEquals(8, billers.size());
+		assertEquals(10, billers.size());
 		assertTrue(products.isAvailable());
 		assertEquals(7, products.size());
 
@@ -260,10 +270,10 @@ class MigrationIntegrationTest {
 		}
 
 		assertEquals(12, transferCount);
-		assertEquals(8, paymentCount);
+		assertEquals(12, paymentCount);
 
 		Map<String, CSVRecord> byId = readCsvById(outputPath, BeneficiaryDetailsSchema.HEADER, "beneficiary_id");
-		assertEquals(20, byId.size());
+		assertEquals(24, byId.size());
 
 		// Botswana EFT, valid branch match. customer_country_code now comes from the fixed
 		// IswCountry table (country_id=2 -> BW), not the dynamic CountryPartner lookup.
@@ -369,6 +379,8 @@ class MigrationIntegrationTest {
 		assertEquals("SYSTEM", p1.get("created_by"));
 		assertEquals("SYSTEM", p1.get("last_modified_by"));
 		assertEquals(runTimestamp, p1.get("last_modified_at"));
+		// Zimbabwe but biller_id isn't 95 -> admin_remarks stays blank.
+		assertEquals("", p1.get("admin_remarks"));
 
 		// destinationAccountNumber/Name override JSON when present.
 		CSVRecord p2 = byId.get(String.valueOf(501 + offset));
@@ -421,6 +433,23 @@ class MigrationIntegrationTest {
 		assertEquals("BILL", p8.get("beneficiary_type"));
 		assertEquals("", p8.get("wallet_type"));
 
+		// Malawi + biller_id=32 -> admin_remarks from additionalParams.productGatewayCode.
+		CSVRecord p9 = byId.get(String.valueOf(508 + offset));
+		assertEquals("MW-ESCOM-GW-42", p9.get("admin_remarks"));
+
+		// Zimbabwe + biller_id=95 + product_id=10209 -> admin_remarks hardcoded to "Domestic".
+		CSVRecord p10 = byId.get(String.valueOf(509 + offset));
+		assertEquals("Domestic", p10.get("admin_remarks"));
+
+		// Zimbabwe + biller_id=95 + product_id=10208 -> admin_remarks hardcoded to "Custom".
+		CSVRecord p11 = byId.get(String.valueOf(510 + offset));
+		assertEquals("Custom", p11.get("admin_remarks"));
+
+		// Zimbabwe + biller_id=95, no matching product_id -> admin_remarks from
+		// additionalParams.utilityType.
+		CSVRecord p12 = byId.get(String.valueOf(511 + offset));
+		assertEquals("Commercial", p12.get("admin_remarks"));
+
 		// TransferBeneficiaries warnings: mismatch(row2), missing branch(row3), unknown type(row11), unresolved customer(row12).
 		assertEquals(4, transferWarnings.size(), "transfer warnings: " + transferWarnings.all());
 		// PaymentBeneficiaries warnings: invalid json(row502) + unresolved customer fallback(row502) + biller_id 6 not found(row501).
@@ -451,14 +480,14 @@ class MigrationIntegrationTest {
 		assertTrue(Files.exists(beneficiaryZm));
 		assertTrue(Files.exists(beneficiaryUnknown));
 
-		// Same 12 TransferBeneficiaries + 8 PaymentBeneficiaries rows as the merged-file test,
+		// Same 12 TransferBeneficiaries + 12 PaymentBeneficiaries rows as the merged-file test,
 		// just spread across per-country files instead of one beneficiary_details.csv.
 		int totalBeneficiaryRows = readCsvById(beneficiaryMw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryBw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryZw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryZm, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryUnknown, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size();
-		assertEquals(20, totalBeneficiaryRows);
+		assertEquals(24, totalBeneficiaryRows);
 
 		// Row 1 (Botswana EFT, customer 200) lands in the BW file, and nowhere else.
 		assertTrue(readCsvById(beneficiaryBw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").containsKey("1"));
@@ -580,7 +609,7 @@ class MigrationIntegrationTest {
 		ProductsRepository products = ProductsRepository.load(connection, config);
 
 		assertTrue(billers.isAvailable());
-		assertEquals(8, billers.size());
+		assertEquals(10, billers.size());
 		assertTrue(products.isAvailable());
 		assertEquals(7, products.size());
 

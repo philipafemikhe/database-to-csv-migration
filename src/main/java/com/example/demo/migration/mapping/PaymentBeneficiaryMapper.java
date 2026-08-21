@@ -42,6 +42,10 @@ import java.sql.Timestamp;
  *   created_at                        <- createDate (this table, unlike TransferBeneficiaries, has one)
  *   last_modified_at                  <- migration run timestamp
  *   created_by / last_modified_by     <- SYSTEM
+ *   admin_remarks                     <- Malawi biller_id=32: additionalParams.productGatewayCode.
+ *                                         Zimbabwe biller_id=95: "Domestic" for product_id=10209,
+ *                                         "Custom" for product_id=10208, else additionalParams.utilityType.
+ *                                         Blank for everything else.
  *   biller_id                         <- biller_id
  *   biller_name                       <- Billers lookup by biller_id
  *   biller_input_value                <- customerReferece (sic - the source column is misspelled)
@@ -123,6 +127,8 @@ public final class PaymentBeneficiaryMapper {
 
 		String currency = AdditionalParamsParser.firstText(json, "currencyCode");
 
+		String adminRemarks = adminRemarks(country, billerId, productId, json);
+
 		return new OutputRecord(BeneficiaryDetailsSchema.HEADER)
 				.set("beneficiary_id", oldId + idOffset)
 				.set("customer_id", customerIdOut)
@@ -140,10 +146,31 @@ public final class PaymentBeneficiaryMapper {
 				.set("last_modified_at", runTimestamp)
 				.set("created_by", "SYSTEM")
 				.set("last_modified_by", "SYSTEM")
+				.set("admin_remarks", adminRemarks)
 				.set("biller_id", billerId)
 				.set("biller_name", biller == null ? null : biller.name())
 				.set("biller_input_value", customerReference)
 				.set("wallet_type", walletType)
 				.set("wallet_code", walletCode);
+	}
+
+	private static String adminRemarks(IswCountry country, Long billerId, Long productId, JsonNode json) {
+		if (country == IswCountry.MALAWI && isId(billerId, 32)) {
+			return AdditionalParamsParser.firstText(json, "productGatewayCode");
+		}
+		if (country == IswCountry.ZIMBABWE && isId(billerId, 95)) {
+			if (isId(productId, 10209)) {
+				return "Domestic";
+			}
+			if (isId(productId, 10208)) {
+				return "Custom";
+			}
+			return AdditionalParamsParser.firstText(json, "utilityType");
+		}
+		return null;
+	}
+
+	private static boolean isId(Long actual, long expected) {
+		return actual != null && actual == expected;
 	}
 }

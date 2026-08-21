@@ -158,6 +158,10 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
     table).
   - `created_by` / `last_modified_by` ← `SYSTEM`; `last_modified_at` ← the migration run
     timestamp (same value as `TransferBeneficiaries.created_at`).
+  - `admin_remarks` (see `PaymentBeneficiaryMapper.adminRemarks`): Malawi `biller_id=32` →
+    `additionalParams.productGatewayCode`; Zimbabwe `biller_id=95` → `"Domestic"` for
+    `product_id=10209`, `"Custom"` for `product_id=10208`, else `additionalParams.utilityType`;
+    blank for everything else.
 
 ### customer_info (Users)
 
