@@ -8,7 +8,8 @@ public final class TransactionSchema {
 			"statuscode", "statusdescription", "transactiondate", "destinationaccount", "transferprocessor",
 			"customerreference", "finalresponsecode", "gatewayreference", "initialresponsecode", "customerid",
 			"destination_bank_id", "biller_id", "product_id", "phonenumber", "country_code", "receiptno", "tokens",
-			"destinationaccountname", "channel", "userid", "sourceaccountcurrency"
+			"destinationaccountname", "channel", "userid", "sourceaccountcurrency", "biller_gateway_code",
+			"wallet_type", "wallet_code"
 	};
 
 	private TransactionSchema() {

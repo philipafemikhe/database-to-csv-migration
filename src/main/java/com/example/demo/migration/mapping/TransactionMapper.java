@@ -3,6 +3,8 @@ package com.example.demo.migration.mapping;
 import com.example.demo.migration.WarningCollector;
 import com.example.demo.migration.db.JdbcUtils;
 import com.example.demo.migration.model.BankRecord;
+import com.example.demo.migration.model.BillerRecord;
+import com.example.demo.migration.model.ProductRecord;
 import com.example.demo.migration.model.UserRecord;
 import com.example.demo.migration.repo.BanksRepository;
 import com.example.demo.migration.repo.BillersRepository;
@@ -24,6 +26,16 @@ import java.sql.SQLException;
  *   country_code          <- country_id, mapped via IswCountry's fixed 1-4 table
  *   userid / biller_id / product_id <- copied verbatim as raw ids (unlike customerid/destination_bank_id,
  *                             which are resolved to a name)
+ *   biller_gateway_code   <- Billers.gatewayCode by biller_id, only when dtype resolves to BILL; blank
+ *                             otherwise
+ *   wallet_type / wallet_code <- per MigrationCorrection_Wallets.docx: Malawi/Botswana rows join
+ *                             Products by product_id, then check the resolved Products.name against
+ *                             a fixed set of wallet product names (see WalletProductMapper - matched
+ *                             by name, not product_id, since ids aren't stable across
+ *                             dev/production) -> Products.name / Products.gatewayCode; Zambia rows
+ *                             join Banks by destinationBank_id, only when that bank has
+ *                             allowInstantTransfer=1 and a WALLET institution -> Banks.name /
+ *                             Banks.code. Blank everywhere else.
  *   everything else       <- copied verbatim from the matching Transactions column
  */
 public final class TransactionMapper {
@@ -90,6 +102,34 @@ public final class TransactionMapper {
 
 		String dtype = TransactionDTypeMapper.map(oldId, isoType, country, billerId, productId, destinationBankId, billers, products, banks, warnings);
 
+		String billerGatewayCode = null;
+		if ("BILL".equals(dtype)) {
+			BillerRecord biller = billers.findById(billerId);
+			if (biller == null) {
+				if (billerId != null && billers.isAvailable()) {
+					warnings.warn(oldId, "biller_id " + billerId + " not found in Billers; biller_gateway_code left blank");
+				}
+			} else {
+				billerGatewayCode = biller.gatewayCode();
+			}
+		}
+
+		String walletType = null;
+		String walletCode = null;
+		if (country == IswCountry.MALAWI || country == IswCountry.BOTSWANA) {
+			ProductRecord product = products.findById(productId);
+			if (product != null && WalletProductMapper.isWalletProduct(product)) {
+				walletType = product.name();
+				walletCode = product.gatewayCode();
+			}
+		} else if (country == IswCountry.ZAMBIA && destinationBankId != null) {
+			BankRecord destinationBank = banks.findById(destinationBankId);
+			if (destinationBank != null && destinationBank.wallet() && Boolean.TRUE.equals(destinationBank.allowInstantTransfer())) {
+				walletType = destinationBank.name();
+				walletCode = destinationBank.code();
+			}
+		}
+
 		return new OutputRecord(TransactionSchema.HEADER)
 				.set("id", oldId)
 				.set("dtype", dtype)
@@ -120,6 +160,9 @@ public final class TransactionMapper {
 				.set("destinationaccountname", destinationAccountName)
 				.set("channel", channel)
 				.set("userid", userId)
-				.set("sourceaccountcurrency", sourceAccountCurrency);
+				.set("sourceaccountcurrency", sourceAccountCurrency)
+				.set("biller_gateway_code", billerGatewayCode)
+				.set("wallet_type", walletType)
+				.set("wallet_code", walletCode);
 	}
 }

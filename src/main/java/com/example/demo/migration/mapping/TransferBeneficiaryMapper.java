@@ -27,8 +27,10 @@ import java.util.Locale;
  *   has_branches           <- true iff branch_name was resolved
  *   branch_code            <- BankBranches.gatewayCode, looked up by bankBranch_id (any
  *                              country/type - independent of the branch_name validation above)
- *   wallet_type            <- Banks.code, only for Zambia when the bank is a wallet institution
- *                              with allowInstantTransfer=1
+ *   wallet_type / wallet_code <- per MigrationCorrection_Wallets.docx: Banks.name / Banks.code,
+ *                              only for Zambia when the bank is a wallet institution with
+ *                              allowInstantTransfer=1 (previously wallet_type incorrectly held
+ *                              Banks.code with no separate wallet_code at all)
  *   bank_gateway_code      <- Banks.swiftCode (the gatewayCode column) for RTGS rows, Banks.code
  *                              for INSTANT rows; blank for LOCAL/EFT
  *   is_active / is_deleted <- true / false (always)
@@ -84,7 +86,8 @@ public final class TransferBeneficiaryMapper {
 		}
 
 		boolean zambiaInstantWallet = countryIsZambia && bank != null && bank.wallet() && Boolean.TRUE.equals(bank.allowInstantTransfer());
-		String walletType = zambiaInstantWallet ? bank.code() : null;
+		String walletType = zambiaInstantWallet ? bank.name() : null;
+		String walletCode = zambiaInstantWallet ? bank.code() : null;
 
 		String bankGatewayCode = null;
 		if (bank != null && transactionType != null) {
@@ -135,6 +138,7 @@ public final class TransferBeneficiaryMapper {
 				.set("is_deleted", false)
 				.set("created_at", runTimestamp)
 				.set("wallet_type", walletType)
+				.set("wallet_code", walletCode)
 				.set("beneficiary_currency", accountCurrency)
 				.set("has_branches", hasBranches)
 				.set("branch_code", branchCode)

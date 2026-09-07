@@ -10,8 +10,9 @@ package com.example.demo.migration.mapping;
  *   Zimbabwe:  BILL, unconditionally.
  *   Zambia:    BILL, unconditionally.
  *
- * The same biller_id/product_id combination that resolves to IWL here is also what makes a row
- * wallet-eligible for wallet_type/wallet_code (see PaymentBeneficiaryMapper).
+ * wallet_type/wallet_code are a separate concern (see WalletProductMapper, used directly by
+ * PaymentBeneficiaryMapper) - they no longer key off this same biller_id/product_id pair, per
+ * MigrationCorrection_Wallets.docx.
  */
 public final class PaymentBeneficiaryTypeMapper {
 

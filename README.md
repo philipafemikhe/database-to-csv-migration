@@ -125,9 +125,10 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   `INSTANT` wallet exception which does override.
 - `bank_name` / `swift_code` come from the `Banks` table by `bank_id` (`swift_code` is actually
   `Banks.gatewayCode`, see `banks.column.swiftCode`).
-- `wallet_type` ← `Banks.code`, only when Zambia + wallet institution + `allowInstantTransfer=1`
-  (same condition as the `beneficiary_type` exception above); blank otherwise. Uses the `code`
-  column, not the bank's name.
+- `wallet_type` / `wallet_code` ← `Banks.name` / `Banks.code`, only when Zambia + wallet
+  institution + `allowInstantTransfer=1` (same condition as the `beneficiary_type` exception
+  above); blank otherwise. Per `MigrationCorrection_Wallets.docx` - `wallet_type` previously held
+  `Banks.code` with no separate `wallet_code` column populated at all.
 - `bank_gateway_code` ← `Banks.swiftCode` (the `gatewayCode` column) for `RTGS` rows, `Banks.code`
   for `INSTANT` rows (wallet or not - both draw from `code`); blank for `LOCAL`/`EFT`.
 - `branch_name` / `has_branches` are only populated for Botswana `EFT` rows, and only after
@@ -151,17 +152,39 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   - `nickname` ← `additionalParams.customerName` (unlike `beneficiary_name`, this doesn't fall
     back to `destinationAccountName`/other JSON keys).
   - `wallet_type` / `wallet_code` ← `Products.name` / `Products.gatewayCode`, looked up by
-    `product_id`, only for the Malawi/Botswana biller/product combinations above that resolve to
-    `IWL`; blank otherwise.
+    `product_id`, for Malawi/Botswana rows whose resolved `Products.name` is one of a fixed set of
+    six wallet product names (`Bank to Mpamba Wallet`, `Bank to Airtel Money`, `Orange Money Bank
+    to Wallet`, `SIMPO Transfer/Cashout`, `Simpo Cash Agent Deposit`, `MYZAKA` - see
+    `WalletProductMapper`), per `MigrationCorrection_Wallets.docx`. Matched by name rather than the
+    doc's paired `product_id`s, for the same dev/production-stability reason as the `admin_remarks`
+    rules above. This is independent of the biller/product pair that decides `beneficiary_type`
+    above (a row can be `BILL` and still have a resolved `wallet_type`/`wallet_code`, or be `IWL`
+    with them blank) - an earlier version of this mapper tied wallet_type/wallet_code population
+    directly to the `beneficiary_type` IWL determination, which the correction doc found to be
+    wrong.
   - `biller_name` ← `Billers.name`, looked up by `biller_id`.
   - `biller_input_value` ← `customerReferece` (sic - that's the actual column name on the source
     table).
   - `created_by` / `last_modified_by` ← `SYSTEM`; `last_modified_at` ← the migration run
     timestamp (same value as `TransferBeneficiaries.created_at`).
-  - `admin_remarks` (see `PaymentBeneficiaryMapper.adminRemarks`): Malawi `biller_id=32` →
-    `additionalParams.productGatewayCode`; Zimbabwe `biller_id=95` → `"Domestic"` for
-    `product_id=10209`, `"Custom"` for `product_id=10208`, else `additionalParams.utilityType`;
-    blank for everything else.
+  - `admin_remarks` (see `PaymentBeneficiaryMapper.adminRemarks`): every rule keys off `Billers.name`
+    (case-insensitive `contains`), and the one rule with a product-level exception keys off
+    `Products.name` the same way - never `biller_id`/`product_id`, since ids aren't stable across
+    dev/production even though names are. Each rule is gated to a specific country: Malawi + name
+    contains `"TNM"` and `"Bundle"` → `additionalParams.productGatewayCode`; Zimbabwe + name contains
+    `"City of Bulawayo"` → `additionalParams.utilityType` (unconditionally - no product-level
+    exception); Zimbabwe + name contains `"Nyaradzo"` → static `"1"`; Zimbabwe + name contains
+    `"Zimra"` → the resolved `Products` row's name decides: contains `"Custom"` → `"Custom"`,
+    otherwise → static `"Domestic"`; Malawi + name contains both `"Airtel"` and `"Bundle"` →
+    `additionalParams.productGatewayCode`. Blank for everything else. (An earlier version of the
+    Zimra/City-of-Bulawayo split nested the `"Domestic"`/`"Custom"` exception under City of Bulawayo
+    and keyed it off `product_id 10209`/`10208` per the original mapping doc; a real Products extract
+    showed those two products actually belong to Zimra, not City of Bulawayo, so the exception was
+    moved to where the data says it belongs, and switched to matching the product's name instead of
+    its id for the same dev/production-stability reason as the biller rules.)
+  - `bank_gateway_code` ← `Billers.gatewayCode` by `biller_id`, only when `beneficiary_type` resolves
+    to `BILL`; blank for `IWL` rows (which carry their gateway code in `wallet_code` instead, via
+    `Products.gatewayCode`).
 
 ### customer_info (Users)
 
@@ -231,6 +254,21 @@ from that spreadsheet's "Target Field" column, inconsistent casing and all.
     `beneficiary_type`/`BeneficiaryTypeMapper` for Zambia.
   - Anything else (unrecognized `DTYPE`, unresolved country, or a lookup that can't be resolved)
     is logged as a warning and left blank rather than guessed.
+- `biller_gateway_code` ← `Billers.gatewayCode` by `biller_id`, only when `dtype` resolves to `BILL`;
+  blank for every other `dtype` (an unresolvable `biller_id` on a `BILL` row is logged as a warning,
+  same pattern as the other lookup-driven fields).
+- `wallet_type` / `wallet_code`, per `MigrationCorrection_Wallets.docx`: Malawi/Botswana rows join
+  `Products` by `product_id`, then check the resolved `Products.name` against the same fixed set
+  of six wallet product names as `beneficiary_details`'s `PaymentBeneficiaries` mapping (see
+  `WalletProductMapper`) → `Products.name` / `Products.gatewayCode`. Zambia rows instead join
+  `Banks` by `destinationBank_id`, only when that bank has `allowInstantTransfer=1` and a `WALLET`
+  institution → `Banks.name` / `Banks.code` (same criteria as the Zambia wallet exception used
+  elsewhere, but applied independently of `dtype` here rather than gating on it). Blank
+  everywhere else. These two columns didn't exist in the `transaction` target schema before this
+  correction.
+- `destinationaccountname` ← `destinationAccountName`, copied unconditionally for every transaction
+  type including bill payments (it's a direct copy like the rest of the fields in the first bullet
+  above - there's no dtype-based gating on it).
 - `Banks.allowInstantTransfer` (config: `banks.column.allowInstantTransfer`, default
   `allowsInstantTransfer`) and the `Billers`/`Products` tables (schema undocumented, resolved
   dynamically like `Banks`/`CountryPartner` — see `billers.column.*`/`products.column.*`) are the
