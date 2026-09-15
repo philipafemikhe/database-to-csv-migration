@@ -2,6 +2,7 @@ package com.example.demo.migration.source;
 
 import com.example.demo.migration.WarningCollector;
 import com.example.demo.migration.csv.RecordWriter;
+import com.example.demo.migration.db.CustomerIdFilter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.PaymentBeneficiaryMapper;
 import com.example.demo.migration.repo.BillersRepository;
@@ -12,9 +13,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.List;
 
 public final class PaymentBeneficiarySource {
 
@@ -32,14 +34,19 @@ public final class PaymentBeneficiarySource {
 				+ "destinationAccountNumber, destinationAccountName, customerReferece";
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
-		String sql = "SELECT " + top + columns + " FROM " + config.paymentBeneficiariesTable();
+		List<Long> customerIds = CustomerIdFilter.parse(config.customerIds());
+		String sql = "SELECT " + top + columns + " FROM " + config.paymentBeneficiariesTable()
+				+ (customerIds.isEmpty() ? "" : " WHERE customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
 
 		long offset = config.paymentBeneficiaryIdOffset();
 		long start = System.currentTimeMillis();
 		int count = 0;
-		try (Statement st = connection.createStatement()) {
+		try (PreparedStatement st = connection.prepareStatement(sql)) {
 			st.setFetchSize(1000);
-			try (ResultSet rs = st.executeQuery(sql)) {
+			for (int i = 0; i < customerIds.size(); i++) {
+				st.setLong(i + 1, customerIds.get(i));
+			}
+			try (ResultSet rs = st.executeQuery()) {
 				while (rs.next()) {
 					writer.write(PaymentBeneficiaryMapper.mapRow(rs, users, billers, products, offset, runTimestamp, warnings));
 					count++;

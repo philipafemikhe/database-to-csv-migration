@@ -35,6 +35,8 @@ public final class ArgParser {
 				raw.containsKey("skip-beneficiaries"),
 				raw.containsKey("skip-customers"),
 				raw.containsKey("skip-transactions"),
-				raw.containsKey("split-by-country"));
+				raw.containsKey("split-by-country"),
+				raw.get("status-filter"),
+				raw.get("customer-ids"));
 	}
 }

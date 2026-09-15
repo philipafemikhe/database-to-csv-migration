@@ -2,6 +2,7 @@ package com.example.demo.migration.source;
 
 import com.example.demo.migration.WarningCollector;
 import com.example.demo.migration.csv.RecordWriter;
+import com.example.demo.migration.db.CustomerIdFilter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.TransactionMapper;
 import com.example.demo.migration.repo.BanksRepository;
@@ -13,9 +14,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 public final class TransactionSource {
 
@@ -35,13 +39,31 @@ public final class TransactionSource {
 				+ "sourceAccountCurrency";
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
-		String sql = "SELECT " + top + columns + " FROM " + config.transactionsTable();
+		String statusFilter = normalizeStatusFilter(config.statusFilter());
+		List<Long> customerIds = CustomerIdFilter.parse(config.customerIds());
+
+		List<String> conditions = new ArrayList<>();
+		if (statusFilter != null) {
+			conditions.add("UPPER(status) = ?");
+		}
+		if (!customerIds.isEmpty()) {
+			conditions.add("customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
+		}
+		String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+		String sql = "SELECT " + top + columns + " FROM " + config.transactionsTable() + where;
 
 		long start = System.currentTimeMillis();
 		int count = 0;
-		try (Statement st = connection.createStatement()) {
+		try (PreparedStatement st = connection.prepareStatement(sql)) {
 			st.setFetchSize(1000);
-			try (ResultSet rs = st.executeQuery(sql)) {
+			int paramIndex = 1;
+			if (statusFilter != null) {
+				st.setString(paramIndex++, statusFilter);
+			}
+			for (Long customerId : customerIds) {
+				st.setLong(paramIndex++, customerId);
+			}
+			try (ResultSet rs = st.executeQuery()) {
 				while (rs.next()) {
 					writer.write(TransactionMapper.mapRow(rs, users, banks, billers, products, warnings));
 					count++;
@@ -53,5 +75,19 @@ public final class TransactionSource {
 		}
 		log.info("Transactions: completed, {} rows in {} ms ({} warning(s))", count, System.currentTimeMillis() - start, warnings.size());
 		return count;
+	}
+
+	private static String normalizeStatusFilter(String raw) {
+		if (raw == null) {
+			return null;
+		}
+		String upper = raw.trim().toUpperCase(Locale.ROOT);
+		if (upper.equals("SUCCESS")) {
+			return "SUCCESSFUL";
+		}
+		if (upper.equals("SUCCESSFUL") || upper.equals("FAILED")) {
+			return upper;
+		}
+		throw new IllegalArgumentException("Unrecognized status.filter/--status-filter value '" + raw + "'; expected SUCCESS, SUCCESSFUL, or FAILED");
 	}
 }

@@ -128,7 +128,7 @@ public final class MigrationRunner {
 		int count;
 		try (CsvWriter writer = new CsvWriter(outputPath, CustomerInfoSchema.HEADER)) {
 			log.info("Migrating Users -> {}", outputPath.toAbsolutePath());
-			count = CustomerInfoSource.migrate(users, branches, devices, countries, writer, runTimestamp, warnings);
+			count = CustomerInfoSource.migrate(config, users, branches, devices, countries, writer, runTimestamp, warnings);
 		}
 
 		Path warningsPath = warnings.isEmpty() ? null : ValidationWarning.writeLog(outputPath, warnings.all());

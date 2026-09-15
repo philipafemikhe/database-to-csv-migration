@@ -23,9 +23,10 @@ import java.util.Set;
  *   LocalTransfer      -> WIB, unconditionally.
  *   BillPayment        -> Malawi/Botswana: Billers.gatewayCode lookup by biller_id decides
  *                          IWL vs BILL; Zimbabwe/Zambia: always BILL.
- *   AirtimePurchase    -> Malawi: Products.gatewayCode lookup by product_id decides BILL vs IWL
- *                          (not Billers - Airtime keys off the product, unlike BillPayment which
- *                          keys off the biller); everywhere else: always BILL.
+ *   AirtimePurchase    -> Malawi: product_id resolves to a Products row; if that row is one of
+ *                          WalletProductMapper's wallet products (by gatewayCode) -> IWL, else ->
+ *                          BILL (not Billers - Airtime keys off the product, unlike BillPayment
+ *                          which keys off the biller); everywhere else: always BILL.
  *   InterBankTransfer  -> Malawi: Banks.allowInstantTransfer by destinationBank_id (1->OBI,
  *                          0->OBR); Zimbabwe: destinationBank_id NULL->OBI(ZIPIT), else
  *                          OBR(RTGS); Botswana: always OBE; Zambia: wallet bank->IWL, else
@@ -57,7 +58,7 @@ public final class TransactionDTypeMapper {
 			case "INTERBANKTRANSFER":
 				return interBankTransfer(oldId, country, destinationBankId, banks, warnings);
 			default:
-				warnings.warn(oldId, "unrecognized transaction DTYPE '" + isoTransactionType + "'; dtype left blank");
+				warnings.warn(oldId, "unrecognized transaction DTYPE '" + isoTransactionType + "' (country=" + country + "); dtype left blank");
 				return null;
 		}
 	}
@@ -84,22 +85,14 @@ public final class TransactionDTypeMapper {
 		if (country != IswCountry.MALAWI) {
 			return "BILL";
 		}
-		String gatewayCode = productGatewayCodeOf(productId, products);
-		if (gatewayCode == null) {
-			warnings.warn(oldId, "Malawi AirtimePurchase has no resolvable Products.gatewayCode for product_id " + productId + "; dtype left blank");
+		ProductRecord product = productId == null ? null : products.findById(productId);
+		if (product == null) {
+			if (productId != null && products.isAvailable()) {
+				warnings.warn(oldId, "Malawi AirtimePurchase product_id " + productId + " not found in Products (country=" + country + "); dtype left blank");
+			}
 			return null;
 		}
-		switch (gatewayCode.toUpperCase(Locale.ROOT)) {
-			case "TNMAIR":
-			case "ATLAIR":
-				return "BILL";
-			case "AIRB2W":
-			case "TNMB2W":
-				return "IWL";
-			default:
-				warnings.warn(oldId, "Malawi AirtimePurchase product gateway code '" + gatewayCode + "' not recognized; dtype left blank");
-				return null;
-		}
+		return WalletProductMapper.isWalletProduct(product) ? "IWL" : "BILL";
 	}
 
 	private static String interBankTransfer(long oldId, IswCountry country, Long destinationBankId, BanksRepository banks, WarningCollector warnings) {
@@ -115,13 +108,14 @@ public final class TransactionDTypeMapper {
 
 		BankRecord bank = destinationBankId == null ? null : banks.findById(destinationBankId);
 		if (bank == null) {
-			warnings.warn(oldId, "InterBankTransfer destinationBank_id " + destinationBankId + " not found in Banks; dtype left blank");
+			warnings.warn(oldId, "InterBankTransfer destinationBank_id " + destinationBankId + " not found in Banks (country="
+					+ country + "); dtype left blank");
 			return null;
 		}
 
 		if (country == IswCountry.MALAWI) {
 			if (bank.allowInstantTransfer() == null) {
-				warnings.warn(oldId, "InterBankTransfer destinationBank_id " + destinationBankId + " has no resolvable allowInstantTransfer flag; dtype left blank");
+				warnings.warn(oldId, "InterBankTransfer destinationBank_id " + destinationBankId + " has no resolvable allowInstantTransfer flag (country=" + country + "); dtype left blank");
 				return null;
 			}
 			return bank.allowInstantTransfer() ? "OBI" : "OBR";
@@ -133,7 +127,7 @@ public final class TransactionDTypeMapper {
 			return "IWL";
 		}
 		if (bank.allowInstantTransfer() == null) {
-			warnings.warn(oldId, "InterBankTransfer destinationBank_id " + destinationBankId + " has no resolvable allowInstantTransfer flag; dtype left blank");
+			warnings.warn(oldId, "InterBankTransfer destinationBank_id " + destinationBankId + " has no resolvable allowInstantTransfer flag (country=" + country + "); dtype left blank");
 			return null;
 		}
 		return bank.allowInstantTransfer() ? "OBI" : "OBR";
@@ -145,14 +139,6 @@ public final class TransactionDTypeMapper {
 		}
 		BillerRecord biller = billers.findById(billerId);
 		return biller == null ? null : biller.gatewayCode();
-	}
-
-	private static String productGatewayCodeOf(Long productId, ProductsRepository products) {
-		if (productId == null) {
-			return null;
-		}
-		ProductRecord product = products.findById(productId);
-		return product == null ? null : product.gatewayCode();
 	}
 
 	private static String unresolvedCountry(long oldId, String isoTransactionType, WarningCollector warnings) {

@@ -92,6 +92,14 @@ public final class MigrationConfig {
 		return v == null ? null : Integer.parseInt(v);
 	}
 
+	public String statusFilter() {
+		return get("status.filter", null);
+	}
+
+	public String customerIds() {
+		return get("customer.ids", null);
+	}
+
 	public String usersTable() {
 		return get("users.table", "dbo.Users");
 	}

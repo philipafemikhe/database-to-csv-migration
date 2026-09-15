@@ -50,6 +50,8 @@ public final class MigrationCli {
 			options.outputCustomers().ifPresent(v -> config.override("output.customerInfo", v));
 			options.outputTransactions().ifPresent(v -> config.override("output.transactions", v));
 			options.limit().ifPresent(v -> config.override("row.limit", v));
+			options.statusFilter().ifPresent(v -> config.override("status.filter", v));
+			options.customerIds().ifPresent(v -> config.override("customer.ids", v));
 
 			try (Connection connection = ConnectionFactory.open(config)) {
 				if (options.describeSchema()) {
@@ -77,6 +79,13 @@ public final class MigrationCli {
 				+ "  --output-customers      Overrides 'output.customerInfo': where to write customer_info.csv.\n"
 				+ "  --output-transactions   Overrides 'output.transactions': where to write transaction.csv.\n"
 				+ "  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).\n"
+				+ "  --status-filter         Overrides 'status.filter': only migrate Transactions rows with this status\n"
+				+ "                         (SUCCESS/SUCCESSFUL or FAILED, case-insensitive). Omit to migrate all statuses.\n"
+				+ "  --customer-ids          Overrides 'customer.ids': a comma-separated list of numeric customer ids\n"
+				+ "                         (e.g. --customer-ids=101,102,205). Restricts every migration to just those\n"
+				+ "                         customers - TransferBeneficiaries/PaymentBeneficiaries/Transactions rows are\n"
+				+ "                         filtered by their customer_id column, Users rows by id. Omit to migrate every\n"
+				+ "                         customer.\n"
 				+ "  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.\n"
 				+ "  --skip-customers        Don't migrate Users this run.\n"
 				+ "  --skip-transactions     Don't migrate Transactions this run.\n"

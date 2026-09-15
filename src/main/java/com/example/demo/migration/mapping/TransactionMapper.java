@@ -28,12 +28,14 @@ import java.sql.SQLException;
  *                             which are resolved to a name)
  *   biller_gateway_code   <- Billers.gatewayCode by biller_id, only when dtype resolves to BILL; blank
  *                             otherwise
+ *   transferprocessor     <- for all countries, when dtype resolves to BILL, overwritten with
+ *                             Billers.gatewayCode by biller_id (same lookup as biller_gateway_code
+ *                             above); the raw Transactions.transferProcessor value otherwise
  *   wallet_type / wallet_code <- per MigrationCorrection_Wallets.docx: Malawi/Botswana rows join
- *                             Products by product_id, then check the resolved Products.name against
- *                             a fixed set of wallet product names (see WalletProductMapper - matched
- *                             by name, not product_id, since ids aren't stable across
- *                             dev/production) -> Products.name / Products.gatewayCode; Zambia rows
- *                             join Banks by destinationBank_id, only when that bank has
+ *                             Products by product_id, then check the resolved Products.gatewayCode
+ *                             against a fixed set of wallet product gateway codes (see
+ *                             WalletProductMapper) -> Products.name / Products.gatewayCode; Zambia
+ *                             rows join Banks by destinationBank_id, only when that bank has
  *                             allowInstantTransfer=1 and a WALLET institution -> Banks.name /
  *                             Banks.code. Blank everywhere else.
  *   everything else       <- copied verbatim from the matching Transactions column
@@ -85,7 +87,7 @@ public final class TransactionMapper {
 		String customerIdOut = null;
 		UserRecord user = users.findById(customerId);
 		if (customerId != null && user == null) {
-			warnings.warn(oldId, "customer_id " + customerId + " not found in Users; customerid left blank");
+			warnings.warn(oldId, "customer_id " + customerId + " not found in Users (country=" + country + "); customerid left blank");
 		} else if (user != null) {
 			customerIdOut = user.userName();
 		}
@@ -94,7 +96,7 @@ public final class TransactionMapper {
 		if (destinationBankId != null) {
 			BankRecord bank = banks.findById(destinationBankId);
 			if (bank == null && banks.isAvailable()) {
-				warnings.warn(oldId, "destinationBank_id " + destinationBankId + " not found in Banks; destination_bank_id left blank");
+				warnings.warn(oldId, "destinationBank_id " + destinationBankId + " not found in Banks (country=" + country + "); destination_bank_id left blank");
 			} else if (bank != null) {
 				destinationBankName = bank.name();
 			}
@@ -107,10 +109,11 @@ public final class TransactionMapper {
 			BillerRecord biller = billers.findById(billerId);
 			if (biller == null) {
 				if (billerId != null && billers.isAvailable()) {
-					warnings.warn(oldId, "biller_id " + billerId + " not found in Billers; biller_gateway_code left blank");
+					warnings.warn(oldId, "biller_id " + billerId + " not found in Billers (country=" + country + "); biller_gateway_code left blank");
 				}
 			} else {
 				billerGatewayCode = biller.gatewayCode();
+				transferProcessor = billerGatewayCode;
 			}
 		}
 
