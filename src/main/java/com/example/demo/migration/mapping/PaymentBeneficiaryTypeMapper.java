@@ -1,42 +1,51 @@
 package com.example.demo.migration.mapping;
 
+import com.example.demo.migration.model.BillerRecord;
+import com.example.demo.migration.model.ProductRecord;
+
 /**
- * PaymentBeneficiaries.biller_id/product_id + country -> beneficiary_type, per
- * PaymentBeneficiaries_Inerswitch_MigrationLogic.xlsx.docx:
+ * PaymentBeneficiaries biller/product + country -> beneficiary_type. Keys off
+ * Billers.gatewayCode/Products.gatewayCode, not the raw biller_id/product_id - ids aren't stable
+ * across dev/production, unlike gateway codes (same convention as admin_remarks,
+ * TransactionDTypeMapper, and WalletProductMapper):
  *
- *   Malawi:    (biller_id=5 AND product_id=69) OR (biller_id=7 AND product_id=10083) -> IWL,
+ *   Malawi:    the resolved product is one of WalletProductMapper's wallet products -> IWL,
  *              everything else -> BILL.
- *   Botswana:  biller_id IN (90, 115) -> IWL, everything else -> BILL.
+ *   Botswana:  Billers.gatewayCode is BW-ORANGE-B2C or BW-MYZAKA-BW -> IWL, OR the resolved
+ *              product is one of WalletProductMapper's wallet products -> IWL; everything else ->
+ *              BILL.
  *   Zimbabwe:  BILL, unconditionally.
  *   Zambia:    BILL, unconditionally.
- *
- * wallet_type/wallet_code are a separate concern (see WalletProductMapper, used directly by
- * PaymentBeneficiaryMapper) - they no longer key off this same biller_id/product_id pair, per
- * MigrationCorrection_Wallets.docx.
  */
 public final class PaymentBeneficiaryTypeMapper {
+
+	private static final String BOTSWANA_ORANGE_BILLER_GATEWAY_CODE = "bw-orange-b2c";
+	private static final String BOTSWANA_MYZAKA_BILLER_GATEWAY_CODE = "bw-myzaka-bw";
 
 	private PaymentBeneficiaryTypeMapper() {
 	}
 
-	public static boolean isWallet(IswCountry country, Long billerId, Long productId) {
+	public static boolean isWallet(IswCountry country, BillerRecord biller, ProductRecord product) {
 		if (country == IswCountry.MALAWI) {
-			return (isId(billerId, 5) && isId(productId, 69)) || (isId(billerId, 7) && isId(productId, 10083));
+			return WalletProductMapper.isWalletProduct(product);
 		}
 		if (country == IswCountry.BOTSWANA) {
-			return isId(billerId, 90) || isId(billerId, 115);
+			return isBillerGatewayCode(biller, BOTSWANA_ORANGE_BILLER_GATEWAY_CODE)
+					|| isBillerGatewayCode(biller, BOTSWANA_MYZAKA_BILLER_GATEWAY_CODE)
+					|| WalletProductMapper.isWalletProduct(product);
 		}
 		return false;
 	}
 
-	public static String map(IswCountry country, Long billerId, Long productId) {
+	public static String map(IswCountry country, BillerRecord biller, ProductRecord product) {
 		if (country == null) {
 			return null;
 		}
-		return isWallet(country, billerId, productId) ? "IWL" : "BILL";
+		return isWallet(country, biller, product) ? "IWL" : "BILL";
 	}
 
-	private static boolean isId(Long actual, long expected) {
-		return actual != null && actual == expected;
+	private static boolean isBillerGatewayCode(BillerRecord biller, String expected) {
+		return biller != null && biller.gatewayCode() != null
+				&& expected.equalsIgnoreCase(biller.gatewayCode().trim());
 	}
 }

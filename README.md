@@ -122,7 +122,7 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   column in the same merged output file (only `TransferBeneficiaries` is covered by the doc, but
   leaving `PaymentBeneficiaries` on the old dynamic lookup would produce mismatched values for the
   same column in the same CSV).
-- `beneficiary_type`: `LOCAL`→`WIB`, `EFT`→`OBE` unconditionally. `INSTANT`/`RTGS`→`OBI`/`OBR`
+- `beneficiary_type`: `LOCAL`→`WIB`, `EFT`→`OBE`, `SchoolTransaction`→`STRAN` unconditionally. `INSTANT`/`RTGS`→`OBI`/`OBR`
   (respectively) for every country **except** Zambia, where both instead resolve the same way,
   purely from the row's bank (ignoring which of the two old `transactionType` values it actually
   was): `allowInstantTransfer=1` + `WALLET` institution → `IWL`; `allowInstantTransfer=1` + `BANK`
@@ -140,7 +140,7 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   above); blank otherwise. Per `MigrationCorrection_Wallets.docx` - `wallet_type` previously held
   `Banks.code` with no separate `wallet_code` column populated at all.
 - `bank_gateway_code` ← `Banks.swiftCode` (the `gatewayCode` column) for `RTGS` rows, `Banks.code`
-  for `INSTANT` rows (wallet or not - both draw from `code`); blank for `LOCAL`/`EFT`.
+  for `INSTANT` rows (wallet or not - both draw from `code`); blank for `LOCAL`/`EFT`/`SchoolTransaction`.
 - `branch_name` / `has_branches` are only populated for Botswana `EFT` rows, and only after
   validating the branch's `bank_id` matches the beneficiary row's `bank_id`.
 - `branch_code` ← `BankBranches.gatewayCode`, looked up by `bankBranch_id` - independent of the
@@ -154,45 +154,39 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   `payment.id.offset` to avoid colliding with `TransferBeneficiaries` ids in the merged output.
   Field mapping for the rest of their columns comes from
   `PaymentBeneficiaries_Inerswitch_MigrationLogic.xlsx.docx` in `src/main/resources/`:
-  - `beneficiary_type` (see `PaymentBeneficiaryTypeMapper`): Malawi → `IWL` only when
-    (`biller_id=5` AND `product_id=69`) OR (`biller_id=7` AND `product_id=10083`), else `BILL`;
-    Botswana → `IWL` when `biller_id` IN (90, 115), else `BILL`; Zimbabwe/Zambia → always `BILL`;
-    blank when the customer's country can't be resolved.
+  - `beneficiary_type` (see `PaymentBeneficiaryTypeMapper`): keys off `Billers.gatewayCode`/
+    `Products.gatewayCode`, not the raw `biller_id`/`product_id` - ids aren't stable across
+    dev/production, unlike gateway codes (same convention as `admin_remarks`,
+    `TransactionDTypeMapper`, and `WalletProductMapper`). Malawi → `IWL` when the row's resolved
+    product is one of the eight wallet products below, else `BILL`. Botswana → `IWL` when
+    `Billers.gatewayCode` is `BW-ORANGE-B2C` or `BW-MYZAKA-BW`, OR the row's resolved product is one
+    of the eight wallet products below, else `BILL`. Zimbabwe/Zambia → always `BILL`; blank when the
+    customer's country can't be resolved.
   - `beneficiary_country` uses the same fixed `IswCountry` lookup as `customer_country_code`.
   - `nickname` ← `additionalParams.customerName` (unlike `beneficiary_name`, this doesn't fall
     back to `destinationAccountName`/other JSON keys).
   - `wallet_type` / `wallet_code` ← `Products.name` / `Products.gatewayCode`, looked up by
     `product_id`, for Malawi/Botswana rows whose resolved `Products.gatewayCode` is one of a fixed
     set of eight wallet product gateway codes (`TNMB2W`, `AIRB2W`, `BW-ORANGE-B2C`, `COMVIVAB2W`,
-    `COMVIVAAGENT`, `BW-MYZAKA-B2W`, `AIRTEL`, `TNMAGENTS` - see `WalletProductMapper`), per
-    `MigrationCorrection_Wallets.docx`. This is independent of the biller/product pair that decides
-    `beneficiary_type` above (a row can be `BILL` and still have a resolved
-    `wallet_type`/`wallet_code`, or be `IWL` with them blank) - an earlier version of this mapper
-    tied wallet_type/wallet_code population directly to the `beneficiary_type` IWL determination,
-    which the correction doc found to be wrong.
+    `COMVIVAAGENT`, `BW-MYZAKA-B2W`, `AIRTEL`, `TNMAGENTS` - see `WalletProductMapper`). This same
+    resolved product also drives `beneficiary_type` above, so a row with `wallet_type`/
+    `wallet_code` populated is always `IWL`, but not every `IWL` row has them populated - Botswana's
+    biller-gateway-code rule can put a non-wallet product on `IWL`, leaving `wallet_type`/
+    `wallet_code` blank.
   - `biller_name` ← `Billers.name`, looked up by `biller_id`.
   - `biller_input_value` ← `customerReferece` (sic - that's the actual column name on the source
     table).
   - `created_by` / `last_modified_by` ← `SYSTEM`; `last_modified_at` ← the migration run
     timestamp (same value as `TransferBeneficiaries.created_at`).
-  - `admin_remarks` (see `PaymentBeneficiaryMapper.adminRemarks`): every rule keys off `Billers.name`
-    (case-insensitive `contains`), and the one rule with a product-level exception keys off
-    `Products.name` the same way - never `biller_id`/`product_id`, since ids aren't stable across
-    dev/production even though names are. Each rule is gated to a specific country: Malawi + name
-    contains `"TNM"` and `"Bundle"` → `additionalParams.productGatewayCode`; Zimbabwe + name contains
-    `"City of Bulawayo"` → `additionalParams.utilityType` (unconditionally - no product-level
-    exception); Zimbabwe + name contains `"Nyaradzo"` → static `"1"`; Zimbabwe + name contains
-    `"Zimra"` → the resolved `Products` row's name decides: contains `"Custom"` → `"Custom"`,
-    otherwise → static `"Domestic"`; Malawi + name contains both `"Airtel"` and `"Bundle"` →
-    `additionalParams.productGatewayCode`; Malawi + `Billers.gatewayCode` is `"MWB"` (biller_id `4`,
-    `Water Board Postpaid Bills`) or `"MWBPREP"` (biller_id `12`, `Water Board PrePaid Bills`) →
-    the row's own `product_id` - matched by gateway code, not name, unlike every other rule here.
-    Blank for everything else. (An earlier version of the
-    Zimra/City-of-Bulawayo split nested the `"Domestic"`/`"Custom"` exception under City of Bulawayo
-    and keyed it off `product_id 10209`/`10208` per the original mapping doc; a real Products extract
-    showed those two products actually belong to Zimra, not City of Bulawayo, so the exception was
-    moved to where the data says it belongs, and switched to matching the product's name instead of
-    its id for the same dev/production-stability reason as the biller rules.)
+  - `admin_remarks` (see `PaymentBeneficiaryMapper.adminRemarks`): each rule is gated to a specific
+    country. Malawi + `Billers.gatewayCode` is `"TNMBUN"` (TNM Bundles) → `additionalParams.productGatewayCode`;
+    Malawi + `Billers.gatewayCode` is `"AIRTEL"` → `additionalParams.productGatewayCode`; Malawi +
+    `Billers.gatewayCode` is `"MWB"` (Water Board Postpaid Bills) or `"MWBPREP"` (Water Board
+    PrePaid Bills) → the row's own `product_id`. Zimbabwe + `Billers.gatewayCode` is
+    `"CITYOFBULAWAYAO"` → `additionalParams.utilityType`; Zimbabwe + `Billers.gatewayCode` is
+    `"NYARADZO"` → static `"1"`; Zimbabwe + `Billers.gatewayCode` is `"ZIMRA"` → static `"Domestic"`;
+    Zimbabwe + `Billers.gatewayCode` is `"CIMAS"` → `additionalParams.referenceType`. Blank for
+    everything else.
   - `bank_gateway_code` ← `Billers.gatewayCode` by `biller_id`, only when `beneficiary_type` resolves
     to `BILL`; blank for `IWL` rows (which carry their gateway code in `wallet_code` instead, via
     `Products.gatewayCode`).

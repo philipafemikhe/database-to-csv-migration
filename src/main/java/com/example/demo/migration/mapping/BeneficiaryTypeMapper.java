@@ -8,9 +8,10 @@ import java.util.Locale;
  * TransferBeneficiaries.transactionType -> beneficiary_details.beneficiary_type, per
  * TransferBeneficaries_Migration_Logic.xlsx.
  *
- *   LOCAL           -> WIB, unconditionally.
- *   EFT             -> OBE, unconditionally.
- *   INSTANT / RTGS  -> OBI / OBR (respectively), except in Zambia, where both instead resolve
+ *   LOCAL             -> WIB, unconditionally.
+ *   EFT               -> OBE, unconditionally.
+ *   SchoolTransaction -> STRAN, unconditionally.
+ *   INSTANT / RTGS    -> OBI / OBR (respectively), except in Zambia, where both instead resolve
  *                      the same way, purely from the row's bank (allowInstantTransfer +
  *                      institution), ignoring which of the two old transactionType values it
  *                      actually was:
@@ -40,6 +41,8 @@ public final class BeneficiaryTypeMapper {
 				return "WIB";
 			case "EFT":
 				return "OBE";
+			case "SCHOOLTRANSACTION":
+				return "STRAN";
 			case "INSTANT":
 			case "RTGS":
 				return countryIsZambia ? zambiaInstantOrRtgs(bank, normalized) : defaultInstantOrRtgs(normalized);

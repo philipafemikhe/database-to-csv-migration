@@ -122,12 +122,13 @@ class MigrationIntegrationTest {
 					+ "  (13, 'Other BW Biller', 'Other BW Biller'),\n"
 					+ "  (5, 'ESCOMPAY', 'ESCOM'),\n"
 					+ "  (7, 'WBPAY', 'Water Board'),\n"
-					+ "  (90, 'ORANGEPAY', 'Orange Money'),\n"
-					+ "  (115, 'MASCOMPAY', 'Mascom MyZaka'),\n"
-					+ "  (32, 'TNMAGENTS', 'TNM Bundles'),\n"
-					+ "  (95, 'ZW-UTILITY', 'City of Bulawayo'),\n"
-					+ "  (200, 'NYARADZOGW', 'Nyaradzo Funeral Services'),\n"
-					+ "  (202, 'ZIMRAGW', 'Zimra'),\n"
+					+ "  (90, 'BW-ORANGE-B2C', 'Orange Money'),\n"
+					+ "  (115, 'BW-MYZAKA-BW', 'Mascom MyZaka'),\n"
+					+ "  (32, 'TNMBUN', 'TNM Bundles'),\n"
+					+ "  (95, 'CITYOFBULAWAYAO', 'City of Bulawayo'),\n"
+					+ "  (200, 'NYARADZO', 'Nyaradzo Funeral Services'),\n"
+					+ "  (202, 'ZIMRA', 'Zimra'),\n"
+					+ "  (203, 'CIMAS', 'CIMAS Medical Aid Society'),\n"
 					+ "  (204, 'AIRTEL', 'Airtel Bundles'),\n"
 					+ "  (4, 'MWB', 'Water Board Postpaid Bills')\n");
 
@@ -182,7 +183,8 @@ class MigrationIntegrationTest {
 					+ "  (11, 'Unknown Type', '777', 88, 300, 'MWK', 'WEIRD', NULL),\n"
 					+ "  (12, 'Unresolved Customer', '888', 88, 999, 'MWK', 'LOCAL', NULL),\n"
 					+ "  (13, 'Zambia RTGS Wallet Guy', '999', 115, 250, 'ZMW', 'RTGS', NULL),\n"
-					+ "  (14, 'Zambia RTGS NoInstant Guy', '1010', 22, 250, 'ZMW', 'RTGS', NULL)\n");
+					+ "  (14, 'Zambia RTGS NoInstant Guy', '1010', 22, 250, 'ZMW', 'RTGS', NULL),\n"
+					+ "  (15, 'Malawi School Fees Guy', '1111', NULL, 100, 'MWK', 'SchoolTransaction', NULL)\n");
 
 			st.execute("CREATE TABLE dbo.PaymentBeneficiaries (\n"
 					+ "  id BIGINT, additionalParams VARCHAR(2000), customer_id BIGINT, biller_id BIGINT, product_id BIGINT,\n"
@@ -230,7 +232,9 @@ class MigrationIntegrationTest {
 					+ "  (519, '{\"userName\":\"R000200\",\"customerName\":\"BOTSWANA WALLET BILLER NONWALLET PRODUCT GUY\",\"currencyCode\":\"BWP\"}',\n"
 					+ "   200, 90, 999999, FALSE, '2026-04-19 00:00:00.000', NULL, NULL, NULL),\n"
 					+ "  (520, '{\"userName\":\"R000100\",\"customerName\":\"WATER BOARD GUY\",\"currencyCode\":\"MWK\"}',\n"
-					+ "   100, 4, 777, FALSE, '2026-04-20 00:00:00.000', NULL, NULL, NULL)\n");
+					+ "   100, 4, 777, FALSE, '2026-04-20 00:00:00.000', NULL, NULL, NULL),\n"
+					+ "  (521, '{\"userName\":\"R000300\",\"customerName\":\"CIMAS GUY\",\"currencyCode\":\"ZWG\",\"referenceType\":\"Member Number\"}',\n"
+					+ "   300, 203, NULL, FALSE, '2026-04-21 00:00:00.000', NULL, NULL, NULL)\n");
 
 			st.execute("CREATE TABLE dbo.Transactions (\n"
 					+ "  DTYPE VARCHAR(30), id BIGINT, amount NUMERIC(19,2), charge NUMERIC(19,2), bankReference VARCHAR(255),\n"
@@ -289,7 +293,7 @@ class MigrationIntegrationTest {
 		assertTrue(banks.isAvailable());
 		assertEquals(7, banks.size());
 		assertTrue(billers.isAvailable());
-		assertEquals(14, billers.size());
+		assertEquals(15, billers.size());
 		assertTrue(products.isAvailable());
 		assertEquals(14, products.size());
 
@@ -305,11 +309,11 @@ class MigrationIntegrationTest {
 			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, billers, products, writer, runTimestamp, paymentWarnings);
 		}
 
-		assertEquals(14, transferCount);
-		assertEquals(21, paymentCount);
+		assertEquals(15, transferCount);
+		assertEquals(22, paymentCount);
 
 		Map<String, CSVRecord> byId = readCsvById(outputPath, BeneficiaryDetailsSchema.HEADER, "beneficiary_id");
-		assertEquals(35, byId.size());
+		assertEquals(37, byId.size());
 
 		// Botswana EFT, valid branch match. customer_country_code now comes from the fixed
 		// IswCountry table (country_id=2 -> BW), not the dynamic CountryPartner lookup.
@@ -407,6 +411,11 @@ class MigrationIntegrationTest {
 		assertEquals("", r14.get("wallet_type"));
 		assertEquals("ZNCOZMLX", r14.get("bank_gateway_code"));
 
+		// SchoolTransaction -> STRAN, unconditionally, no bank_gateway_code.
+		CSVRecord r15 = byId.get("15");
+		assertEquals("STRAN", r15.get("beneficiary_type"));
+		assertEquals("", r15.get("bank_gateway_code"));
+
 		// Unrecognized transactionType -> blank.
 		assertEquals("", byId.get("11").get("beneficiary_type"));
 
@@ -458,11 +467,10 @@ class MigrationIntegrationTest {
 		assertEquals("", p3.get("beneficiary_type"));
 		assertEquals("", p3.get("beneficiary_country"));
 
-		// Malawi + (biller_id=5 AND product_id=69) -> IWL; wallet_type/wallet_code from Products,
-		// because product_id=69 resolves to gatewayCode "TNMB2W", one of the fixed wallet product
-		// gateway codes (WalletProductMapper) - coincidentally the same product_id that also drives
-		// beneficiary_type here, but the two are resolved independently (see p21/p22 below for a
-		// case where they diverge).
+		// Malawi, product_id=69 resolves to gatewayCode "TNMB2W", one of the fixed wallet product
+		// gateway codes (WalletProductMapper) -> IWL, with wallet_type/wallet_code from the same
+		// Products lookup (see p21/p22 below for a case where beneficiary_type and wallet_type/
+		// wallet_code resolve independently instead).
 		CSVRecord p4 = byId.get(String.valueOf(503 + offset));
 		assertEquals("MW", p4.get("beneficiary_country"));
 		assertEquals("IWL", p4.get("beneficiary_type"));
@@ -475,23 +483,23 @@ class MigrationIntegrationTest {
 		// beneficiary_type is IWL (not BILL) -> bank_gateway_code stays blank (wallet_code carries the gateway code instead).
 		assertEquals("", p4.get("bank_gateway_code"));
 
-		// Malawi, biller_id not in the wallet pair -> BILL, no wallet_type/wallet_code.
+		// Malawi, product_id=NULL doesn't resolve to a wallet product -> BILL, no wallet_type/wallet_code.
 		CSVRecord p5 = byId.get(String.valueOf(504 + offset));
 		assertEquals("BILL", p5.get("beneficiary_type"));
 		assertEquals("", p5.get("wallet_type"));
 		assertEquals("", p5.get("wallet_code"));
 		assertEquals("Random Biller", p5.get("biller_name"));
 
-		// Botswana + biller_id IN (90, 115) -> IWL; wallet_type/wallet_code from Products because
-		// product_id=10144 resolves to gatewayCode "BW-ORANGE-B2C", one of the fixed wallet
-		// product gateway codes.
+		// Botswana, biller_id=90 resolves to gatewayCode "BW-ORANGE-B2C" -> IWL; wallet_type/
+		// wallet_code from Products because product_id=10144 also resolves to gatewayCode
+		// "BW-ORANGE-B2C", one of the fixed wallet product gateway codes.
 		CSVRecord p6 = byId.get(String.valueOf(505 + offset));
 		assertEquals("BW", p6.get("beneficiary_country"));
 		assertEquals("IWL", p6.get("beneficiary_type"));
 		assertEquals("Orange Money Bank to Wallet", p6.get("wallet_type"));
 		assertEquals("BW-ORANGE-B2C", p6.get("wallet_code"));
 
-		// Botswana, biller_id not in (90, 115) -> BILL.
+		// Botswana, biller_id=12 doesn't resolve to BW-ORANGE-B2C/BW-MYZAKA-BW -> BILL.
 		CSVRecord p7 = byId.get(String.valueOf(506 + offset));
 		assertEquals("BILL", p7.get("beneficiary_type"));
 		assertEquals("", p7.get("wallet_type"));
@@ -502,11 +510,11 @@ class MigrationIntegrationTest {
 		assertEquals("BILL", p8.get("beneficiary_type"));
 		assertEquals("", p8.get("wallet_type"));
 
-		// Malawi + Billers.gatewayCode "TNMAGENTS" -> admin_remarks from additionalParams.productGatewayCode.
+		// Malawi + Billers.gatewayCode "TNMBUN" -> admin_remarks from additionalParams.productGatewayCode.
 		CSVRecord p9 = byId.get(String.valueOf(508 + offset));
 		assertEquals("MW-ESCOM-GW-42", p9.get("admin_remarks"));
 
-		// Zimbabwe + biller name contains "City of Bulawayo" -> admin_remarks always from
+		// Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYAO" -> admin_remarks always from
 		// additionalParams.utilityType; product_id=10209 does NOT trigger an override (that product
 		// actually belongs to Zimra per a real Products extract, not City of Bulawayo).
 		CSVRecord p10 = byId.get(String.valueOf(509 + offset));
@@ -516,17 +524,17 @@ class MigrationIntegrationTest {
 		CSVRecord p11 = byId.get(String.valueOf(510 + offset));
 		assertEquals("Water", p11.get("admin_remarks"));
 
-		// Zimbabwe + biller name contains "City of Bulawayo", no product_id at all -> same
+		// Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYAO", no product_id at all -> same
 		// utilityType passthrough.
 		CSVRecord p12 = byId.get(String.valueOf(511 + offset));
 		assertEquals("Commercial", p12.get("admin_remarks"));
 
-		// Zimbabwe + biller name contains "Nyaradzo" -> admin_remarks hardcoded to "1".
+		// Zimbabwe + Billers.gatewayCode "NYARADZO" -> admin_remarks hardcoded to "1".
 		CSVRecord p13 = byId.get(String.valueOf(512 + offset));
 		assertEquals("1", p13.get("admin_remarks"));
-		assertEquals("NYARADZOGW", p13.get("bank_gateway_code"));
+		assertEquals("NYARADZO", p13.get("bank_gateway_code"));
 
-		// Zimbabwe + biller name contains "Zimra", no product_id -> admin_remarks defaults to
+		// Zimbabwe + Billers.gatewayCode "ZIMRA", no product_id -> admin_remarks defaults to
 		// static "Domestic".
 		CSVRecord p14 = byId.get(String.valueOf(513 + offset));
 		assertEquals("Domestic", p14.get("admin_remarks"));
@@ -537,33 +545,35 @@ class MigrationIntegrationTest {
 		assertEquals("AIRTEL", p15.get("bank_gateway_code"));
 
 		// Same "Nyaradzo" biller, but the customer resolves to Malawi, not Zimbabwe -> the country
-		// gate isn't satisfied, so admin_remarks stays blank even though the name matches.
+		// gate isn't satisfied, so admin_remarks stays blank even though the gatewayCode matches.
 		CSVRecord p16 = byId.get(String.valueOf(515 + offset));
 		assertEquals("", p16.get("admin_remarks"));
 
-		// Zimbabwe + biller name contains "Zimra" + product_id=10209 ("Domestic Payments") ->
-		// admin_remarks from the product name match, not a hardcoded product_id.
+		// Zimbabwe + Billers.gatewayCode "ZIMRA" -> admin_remarks is always static "Domestic",
+		// regardless of product_id (10209, "Domestic Payments").
 		CSVRecord p19 = byId.get(String.valueOf(516 + offset));
 		assertEquals("Domestic", p19.get("admin_remarks"));
 
-		// Zimbabwe + biller name contains "Zimra" + product_id=10208 ("Custom Payments") ->
-		// admin_remarks "Custom" via the product name match, proving the override actually fires
-		// (distinct from the "Domestic" default above).
+		// Same rule, product_id=10208 ("Custom Payments") -> still "Domestic", proving the rule
+		// doesn't branch on the resolved product at all.
 		CSVRecord p20 = byId.get(String.valueOf(517 + offset));
-		assertEquals("Custom", p20.get("admin_remarks"));
+		assertEquals("Domestic", p20.get("admin_remarks"));
 
-		// Malawi, biller_id=11 doesn't pair with product_id=69 -> beneficiary_type is BILL, but
-		// product_id=10266 resolves to gatewayCode "COMVIVAB2W", one of the fixed wallet product
-		// gateway codes, so wallet_type/wallet_code still resolve from Products - proving wallet_type/
-		// wallet_code no longer key off beneficiary_type at all (per MigrationCorrection_Wallets.docx).
+		// Malawi, product_id=10266 resolves to gatewayCode "COMVIVAB2W", one of the fixed wallet
+		// product gateway codes -> routes beneficiary_type to IWL regardless of biller_id, and
+		// wallet_type/wallet_code resolve from the same Products lookup; bank_gateway_code stays
+		// blank since the row is IWL, not BILL.
 		CSVRecord p21 = byId.get(String.valueOf(518 + offset));
-		assertEquals("BILL", p21.get("beneficiary_type"));
+		assertEquals("IWL", p21.get("beneficiary_type"));
 		assertEquals("SIMPO Transfer/Cashout", p21.get("wallet_type"));
 		assertEquals("COMVIVAB2W", p21.get("wallet_code"));
+		assertEquals("", p21.get("bank_gateway_code"));
 
-		// Botswana, biller_id=90 alone -> beneficiary_type is IWL, but product_id=999999 doesn't
-		// resolve in Products at all, so wallet_type/wallet_code stay blank - the reverse case of p21
-		// above (IWL with no wallet fields, instead of BILL with wallet fields).
+		// Botswana, biller_id=90 resolves to gatewayCode "BW-ORANGE-B2C" -> beneficiary_type is IWL
+		// via the biller-gateway-code check, but product_id=999999 doesn't resolve in Products at
+		// all, so wallet_type/wallet_code stay blank - the biller-gateway-code check and the
+		// wallet-product check are independent OR'd paths to IWL, not just two views of the same
+		// data.
 		CSVRecord p22 = byId.get(String.valueOf(519 + offset));
 		assertEquals("IWL", p22.get("beneficiary_type"));
 		assertEquals("", p22.get("wallet_type"));
@@ -573,6 +583,10 @@ class MigrationIntegrationTest {
 		// row's own product_id, not additionalParams-derived like the other rules.
 		CSVRecord p23 = byId.get(String.valueOf(520 + offset));
 		assertEquals("777", p23.get("admin_remarks"));
+
+		// Zimbabwe + Billers.gatewayCode "CIMAS" -> admin_remarks from additionalParams.referenceType.
+		CSVRecord p24 = byId.get(String.valueOf(521 + offset));
+		assertEquals("Member Number", p24.get("admin_remarks"));
 
 		// TransferBeneficiaries warnings: mismatch(row2), missing branch(row3), unknown type(row11), unresolved customer(row12).
 		assertEquals(4, transferWarnings.size(), "transfer warnings: " + transferWarnings.all());
@@ -604,14 +618,14 @@ class MigrationIntegrationTest {
 		assertTrue(Files.exists(beneficiaryZm));
 		assertTrue(Files.exists(beneficiaryUnknown));
 
-		// Same 12 TransferBeneficiaries + 20 PaymentBeneficiaries rows as the merged-file test,
+		// Same 15 TransferBeneficiaries + 22 PaymentBeneficiaries rows as the merged-file test,
 		// just spread across per-country files instead of one beneficiary_details.csv.
 		int totalBeneficiaryRows = readCsvById(beneficiaryMw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryBw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryZw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryZm, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size()
 				+ readCsvById(beneficiaryUnknown, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").size();
-		assertEquals(35, totalBeneficiaryRows);
+		assertEquals(37, totalBeneficiaryRows);
 
 		// Row 1 (Botswana EFT, customer 200) lands in the BW file, and nowhere else.
 		assertTrue(readCsvById(beneficiaryBw, BeneficiaryDetailsSchema.HEADER, "beneficiary_id").containsKey("1"));
@@ -733,7 +747,7 @@ class MigrationIntegrationTest {
 		ProductsRepository products = ProductsRepository.load(connection, config);
 
 		assertTrue(billers.isAvailable());
-		assertEquals(14, billers.size());
+		assertEquals(15, billers.size());
 		assertTrue(products.isAvailable());
 		assertEquals(14, products.size());
 
@@ -881,7 +895,7 @@ class MigrationIntegrationTest {
 
 		config.override("customer.ids", "100");
 
-		// TransferBeneficiaries: only customer_id=100 rows (ids 8, 9, 10) - the other 11 rows
+		// TransferBeneficiaries: only customer_id=100 rows (ids 8, 9, 10, 15) - the other 11 rows
 		// (customer_id 200/250/300/999) are excluded.
 		Path beneficiaryPath = tempDir.resolve("beneficiary_filtered.csv");
 		int transferCount;
@@ -891,7 +905,7 @@ class MigrationIntegrationTest {
 			// PaymentBeneficiaries: only customer_id=100 rows (503, 504, 508, 514, 515, 518, 520).
 			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, billers, products, writer, runTimestamp, new WarningCollector("PaymentBeneficiaries"));
 		}
-		assertEquals(3, transferCount);
+		assertEquals(4, transferCount);
 		assertEquals(7, paymentCount);
 		Map<String, CSVRecord> beneficiaryById = readCsvById(beneficiaryPath, BeneficiaryDetailsSchema.HEADER, "beneficiary_id");
 		assertTrue(beneficiaryById.containsKey("8"));
@@ -934,7 +948,7 @@ class MigrationIntegrationTest {
 		try (CsvWriter writer = new CsvWriter(beneficiaryUnfilteredPath, BeneficiaryDetailsSchema.HEADER)) {
 			transferCountUnfiltered = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
 		}
-		assertEquals(14, transferCountUnfiltered);
+		assertEquals(15, transferCountUnfiltered);
 	}
 
 	/**

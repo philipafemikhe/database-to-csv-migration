@@ -32,7 +32,7 @@ import java.util.Locale;
  *                              allowInstantTransfer=1 (previously wallet_type incorrectly held
  *                              Banks.code with no separate wallet_code at all)
  *   bank_gateway_code      <- Banks.swiftCode (the gatewayCode column) for RTGS rows, Banks.code
- *                              for INSTANT rows; blank for LOCAL/EFT
+ *                              for INSTANT rows; blank for LOCAL/EFT/SchoolTransaction
  *   is_active / is_deleted <- true / false (always)
  *   created_at             <- migration run timestamp (source table has no createDate)
  *   beneficiary_currency   <- accountCurrency

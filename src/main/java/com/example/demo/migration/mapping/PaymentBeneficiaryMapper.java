@@ -14,7 +14,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.util.Locale;
 
 /**
  * dbo.PaymentBeneficiaries -> beneficiary_details, per
@@ -33,7 +32,8 @@ import java.util.Locale;
  *                                         fixed 1-4 table - same source used for TransferBeneficiaries'
  *                                         customer_country_code, kept consistent since both mappers
  *                                         feed the same output file
- *   beneficiary_type                  <- country + biller_id/product_id, see PaymentBeneficiaryTypeMapper
+ *   beneficiary_type                  <- country + Billers.gatewayCode/Products.gatewayCode, see
+ *                                         PaymentBeneficiaryTypeMapper
  *   beneficiary_name                  <- destinationAccountName, else additionalParams (toAccountName /
  *                                         customerName / beneficiaryName)
  *   nickname                          <- additionalParams.customerName
@@ -43,38 +43,31 @@ import java.util.Locale;
  *   created_at                        <- createDate (this table, unlike TransferBeneficiaries, has one)
  *   last_modified_at                  <- migration run timestamp
  *   created_by / last_modified_by     <- SYSTEM
- *   admin_remarks                     <- The City of Bulawayo/Nyaradzo/Zimra rules key off
- *                                         Billers.name (case-insensitive contains), not biller_id -
- *                                         biller_id isn't stable across dev/production even though a
- *                                         biller's name is; the TNM Agents/Airtel/Water Board rules
- *                                         key off Billers.gatewayCode instead (an exact match, given
- *                                         directly rather than inferred from the name). Each rule is
- *                                         still gated to a specific country: Malawi +
- *                                         Billers.gatewayCode is "TNMAGENTS" -> additionalParams.productGatewayCode;
- *                                         Zimbabwe + name contains "City of Bulawayo" ->
- *                                         additionalParams.utilityType; Zimbabwe + name contains
- *                                         "Nyaradzo" -> static "1"; Zimbabwe + name contains "Zimra" ->
- *                                         the resolved Products row's name decides: contains "Custom"
- *                                         -> "Custom", else -> static "Domestic" (also matched by
- *                                         name, not product_id - a real Products extract showed the
- *                                         "Domestic"/"Custom" products actually belong to Zimra, not City
- *                                         of Bulawayo, which is where an earlier version of this rule had
- *                                         nested them by product_id); Malawi + Billers.gatewayCode is
- *                                         "AIRTEL" -> additionalParams.productGatewayCode; Malawi +
- *                                         Billers.gatewayCode is "MWB" or "MWBPREP" (biller_ids 4/12,
- *                                         "Water Board Postpaid/PrePaid Bills") -> the row's
- *                                         own product_id. Blank for everything else.
+ *   admin_remarks                     <- Each rule is gated to a specific country. Malawi +
+ *                                         Billers.gatewayCode "TNMBUN" (TNM Bundles) ->
+ *                                         additionalParams.productGatewayCode; Malawi +
+ *                                         Billers.gatewayCode "AIRTEL" ->
+ *                                         additionalParams.productGatewayCode; Malawi +
+ *                                         Billers.gatewayCode "MWB"/"MWBPREP" (Water Board
+ *                                         Postpaid/PrePaid Bills) -> the row's own product_id.
+ *                                         Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYAO" ->
+ *                                         additionalParams.utilityType; Zimbabwe +
+ *                                         Billers.gatewayCode "NYARADZO" -> static "1"; Zimbabwe +
+ *                                         Billers.gatewayCode "ZIMRA" -> static "Domestic";
+ *                                         Zimbabwe + Billers.gatewayCode "CIMAS" ->
+ *                                         additionalParams.referenceType. Blank for everything else.
  *   biller_id                         <- biller_id
  *   biller_name                       <- Billers lookup by biller_id
  *   biller_input_value                <- customerReferece (sic - the source column is misspelled)
- *   wallet_type / wallet_code         <- per MigrationCorrection_Wallets.docx: Products lookup by
- *                                         product_id, for Malawi/Botswana rows whose resolved
- *                                         Products.gatewayCode is one of a fixed set of wallet
- *                                         product gateway codes (see WalletProductMapper) -
- *                                         independent of the
- *                                         biller_id/product_id pair that decides beneficiary_type
- *                                         below, so a row can be BILL and still carry a resolved
- *                                         wallet_type/wallet_code, or vice versa
+ *   wallet_type / wallet_code         <- Products lookup by product_id, for Malawi/Botswana rows
+ *                                         whose resolved Products.gatewayCode is one of a fixed set
+ *                                         of wallet product gateway codes (see WalletProductMapper).
+ *                                         This same resolved product also feeds beneficiary_type
+ *                                         above (a wallet product always routes to IWL), so a row
+ *                                         with wallet_type/wallet_code populated is always IWL, but
+ *                                         not every IWL row has them populated - Botswana's
+ *                                         biller-gateway-code IWL rule can fire on a non-wallet
+ *                                         product, leaving wallet_type/wallet_code blank
  *   bank_gateway_code                 <- Billers.gatewayCode by biller_id, only when beneficiary_type
  *                                         resolves to BILL; blank otherwise (IWL rows draw their gateway
  *                                         code from Products via wallet_code instead)
@@ -125,21 +118,21 @@ public final class PaymentBeneficiaryMapper {
 			}
 		}
 
-		String beneficiaryType = PaymentBeneficiaryTypeMapper.map(country, billerId, productId);
+		ProductRecord product = (country == IswCountry.MALAWI || country == IswCountry.BOTSWANA)
+				? products.findById(productId) : null;
 
 		BillerRecord biller = billers.findById(billerId);
 		if (billerId != null && biller == null && billers.isAvailable()) {
 			warnings.warn(oldId, "biller_id " + billerId + " not found in Billers; biller_name left blank");
 		}
 
+		String beneficiaryType = PaymentBeneficiaryTypeMapper.map(country, biller, product);
+
 		String walletType = null;
 		String walletCode = null;
-		if (country == IswCountry.MALAWI || country == IswCountry.BOTSWANA) {
-			ProductRecord product = products.findById(productId);
-			if (product != null && WalletProductMapper.isWalletProduct(product)) {
-				walletType = product.name();
-				walletCode = product.gatewayCode();
-			}
+		if (product != null && WalletProductMapper.isWalletProduct(product)) {
+			walletType = product.name();
+			walletCode = product.gatewayCode();
 		}
 
 		String beneficiaryName = destinationAccountName != null ? destinationAccountName
@@ -152,7 +145,7 @@ public final class PaymentBeneficiaryMapper {
 
 		String currency = AdditionalParamsParser.firstText(json, "currencyCode");
 
-		String adminRemarks = adminRemarks(country, productId, json, biller, products);
+		String adminRemarks = adminRemarks(country, productId, json, biller);
 
 		String bankGatewayCode = "BILL".equals(beneficiaryType) && biller != null ? biller.gatewayCode() : null;
 
@@ -182,27 +175,24 @@ public final class PaymentBeneficiaryMapper {
 				.set("bank_gateway_code", bankGatewayCode);
 	}
 
-	private static String adminRemarks(IswCountry country, Long productId, JsonNode json, BillerRecord biller, ProductsRepository products) {
-		String billerName = biller == null ? null : biller.name();
+	private static String adminRemarks(IswCountry country, Long productId, JsonNode json, BillerRecord biller) {
 		String billerGatewayCode = biller == null ? null : biller.gatewayCode();
 
-		if (country == IswCountry.MALAWI && "TNMAGENTS".equalsIgnoreCase(billerGatewayCode)) {
+		if (country == IswCountry.MALAWI && "TNMBUN".equalsIgnoreCase(billerGatewayCode)) {
 			return AdditionalParamsParser.firstText(json, "productGatewayCode");
 		}
-		if (country == IswCountry.ZIMBABWE && containsIgnoreCase(billerName, "City of Bulawayo")) {
+		if (country == IswCountry.ZIMBABWE && "CITYOFBULAWAYAO".equalsIgnoreCase(billerGatewayCode)) {
 			return AdditionalParamsParser.firstText(json, "utilityType");
 		}
 		if (country == IswCountry.ZIMBABWE) {
-			if (containsIgnoreCase(billerName, "Nyaradzo")) {
+			if ("NYARADZO".equalsIgnoreCase(billerGatewayCode)) {
 				return "1";
 			}
-			if (containsIgnoreCase(billerName, "Zimra")) {
-				ProductRecord product = products.findById(productId);
-				String productName = product == null ? null : product.name();
-				if (containsIgnoreCase(productName, "Custom")) {
-					return "Custom";
-				}
+			if ("ZIMRA".equalsIgnoreCase(billerGatewayCode)) {
 				return "Domestic";
+			}
+			if ("CIMAS".equalsIgnoreCase(billerGatewayCode)) {
+				return AdditionalParamsParser.firstText(json, "referenceType");
 			}
 		}
 		if (country == IswCountry.MALAWI && "AIRTEL".equalsIgnoreCase(billerGatewayCode)) {
@@ -212,9 +202,5 @@ public final class PaymentBeneficiaryMapper {
 			return productId == null ? null : String.valueOf(productId);
 		}
 		return null;
-	}
-
-	private static boolean containsIgnoreCase(String haystack, String needle) {
-		return haystack != null && haystack.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT));
 	}
 }
