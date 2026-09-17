@@ -56,9 +56,18 @@ Useful flags:
 - `--status-filter=SUCCESSFUL` (or `SUCCESS`) / `--status-filter=FAILED` — only migrate
   Transactions rows with that `status` (case-insensitive; `SUCCESS` is treated as an alias for
   `SUCCESSFUL`). Omit to migrate every status.
-- `--customer-ids=101,102,205` — restrict every migration to just those customers: TransferBeneficiaries/
-  PaymentBeneficiaries/Transactions rows are filtered by their `customer_id` column, and Users rows
-  by `id`. Omit (or pass an empty value) to migrate every customer, same as not passing the flag.
+- `--customer-ids=101,102,R0540050` — restrict every migration to just those customers by default.
+  Each comma-separated token may be a raw numeric `customer_id`/`Users.id`, or a `Users.userName`
+  (e.g. `R0540050`) resolved against the already-loaded Users table - an unresolvable userName
+  fails the run with a clear error rather than silently migrating everyone. Users rows are always
+  filtered by this value; TransferBeneficiaries/PaymentBeneficiaries/Transactions rows are too,
+  unless overridden below. Omit (or pass an empty value) to migrate every customer.
+- `--beneficiary-customer-ids=...` / `--transaction-customer-ids=...` — same format as
+  `--customer-ids`, but scoped to just TransferBeneficiaries/PaymentBeneficiaries or just
+  Transactions respectively, overriding `--customer-ids` for that one migration (e.g. migrate every
+  customer's Transactions but only some customers' beneficiaries). Each falls back to
+  `--customer-ids` when omitted, so passing only `--customer-ids` still restricts every migration
+  as before.
 - `--skip-beneficiaries` / `--skip-customers` / `--skip-transactions` — run just a subset of the
   three migrations.
 - `--split-by-country` — write `beneficiary_details` and `transaction` as one file per country

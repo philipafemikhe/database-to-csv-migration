@@ -13,6 +13,7 @@ import java.util.Properties;
  * Expected properties - see migration.properties.example for the full, documented list:
  *   db.url, db.username, db.password, db.driver
  *   output, output.customerInfo, output.transactions, payment.id.offset, row.limit
+ *   status.filter, customer.ids, beneficiary.customer.ids, transaction.customer.ids
  *   users.table, transferBeneficiaries.table, paymentBeneficiaries.table, bankBranches.table,
  *     devices.table, transactions.table
  *   banks.table, banks.column.id, banks.column.name, banks.column.swiftCode,
@@ -98,6 +99,14 @@ public final class MigrationConfig {
 
 	public String customerIds() {
 		return get("customer.ids", null);
+	}
+
+	public String beneficiaryCustomerIds() {
+		return get("beneficiary.customer.ids", customerIds());
+	}
+
+	public String transactionCustomerIds() {
+		return get("transaction.customer.ids", customerIds());
 	}
 
 	public String usersTable() {

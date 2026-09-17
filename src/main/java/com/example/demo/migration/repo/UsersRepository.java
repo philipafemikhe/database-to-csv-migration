@@ -14,6 +14,7 @@ import java.util.Map;
 public final class UsersRepository {
 
 	private final Map<Long, UserRecord> byId = new HashMap<>();
+	private final Map<String, UserRecord> byUserName = new HashMap<>();
 
 	private UsersRepository() {
 	}
@@ -28,7 +29,7 @@ public final class UsersRepository {
 				ResultSet rs = st.executeQuery(sql)) {
 			while (rs.next()) {
 				long id = rs.getLong("id");
-				repo.byId.put(id, new UserRecord(
+				UserRecord user = new UserRecord(
 						id,
 						JdbcUtils.getString(rs, "userName"),
 						JdbcUtils.getLong(rs, "country_id"),
@@ -48,7 +49,11 @@ public final class UsersRepository {
 						JdbcUtils.getBoolean(rs, "ussdDisabled"),
 						JdbcUtils.getString(rs, "imsinumber"),
 						JdbcUtils.getString(rs, "reasonForProfileDeletion"),
-						JdbcUtils.getTimestamp(rs, "profileDeletionDate")));
+						JdbcUtils.getTimestamp(rs, "profileDeletionDate"));
+				repo.byId.put(id, user);
+				if (user.userName() != null) {
+					repo.byUserName.put(user.userName(), user);
+				}
 			}
 		}
 		return repo;
@@ -56,6 +61,10 @@ public final class UsersRepository {
 
 	public UserRecord findById(Long id) {
 		return id == null ? null : byId.get(id);
+	}
+
+	public UserRecord findByUserName(String userName) {
+		return userName == null ? null : byUserName.get(userName);
 	}
 
 	public Collection<UserRecord> all() {

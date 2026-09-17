@@ -52,6 +52,8 @@ public final class MigrationCli {
 			options.limit().ifPresent(v -> config.override("row.limit", v));
 			options.statusFilter().ifPresent(v -> config.override("status.filter", v));
 			options.customerIds().ifPresent(v -> config.override("customer.ids", v));
+			options.beneficiaryCustomerIds().ifPresent(v -> config.override("beneficiary.customer.ids", v));
+			options.transactionCustomerIds().ifPresent(v -> config.override("transaction.customer.ids", v));
 
 			try (Connection connection = ConnectionFactory.open(config)) {
 				if (options.describeSchema()) {
@@ -81,11 +83,19 @@ public final class MigrationCli {
 				+ "  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).\n"
 				+ "  --status-filter         Overrides 'status.filter': only migrate Transactions rows with this status\n"
 				+ "                         (SUCCESS/SUCCESSFUL or FAILED, case-insensitive). Omit to migrate all statuses.\n"
-				+ "  --customer-ids          Overrides 'customer.ids': a comma-separated list of numeric customer ids\n"
-				+ "                         (e.g. --customer-ids=101,102,205). Restricts every migration to just those\n"
-				+ "                         customers - TransferBeneficiaries/PaymentBeneficiaries/Transactions rows are\n"
-				+ "                         filtered by their customer_id column, Users rows by id. Omit to migrate every\n"
-				+ "                         customer.\n"
+				+ "  --customer-ids          Overrides 'customer.ids': a comma-separated list of customer ids\n"
+				+ "                         (e.g. --customer-ids=101,102,R0540050 - each token may be a raw numeric\n"
+				+ "                         customer_id or a Users.userName, resolved against the Users table). Restricts\n"
+				+ "                         every migration to just those customers by default; Users rows are always\n"
+				+ "                         filtered by this value. Omit to migrate every customer.\n"
+				+ "  --beneficiary-customer-ids   Overrides 'beneficiary.customer.ids': same format as --customer-ids,\n"
+				+ "                         but applies only to TransferBeneficiaries/PaymentBeneficiaries, overriding\n"
+				+ "                         --customer-ids for just that migration (e.g. migrate all customers' Users/\n"
+				+ "                         Transactions but only some customers' beneficiaries). Falls back to\n"
+				+ "                         --customer-ids when omitted.\n"
+				+ "  --transaction-customer-ids   Overrides 'transaction.customer.ids': same format as --customer-ids,\n"
+				+ "                         but applies only to Transactions, overriding --customer-ids for just that\n"
+				+ "                         migration. Falls back to --customer-ids when omitted.\n"
 				+ "  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.\n"
 				+ "  --skip-customers        Don't migrate Users this run.\n"
 				+ "  --skip-transactions     Don't migrate Transactions this run.\n"

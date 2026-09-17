@@ -34,7 +34,7 @@ public final class PaymentBeneficiarySource {
 				+ "destinationAccountNumber, destinationAccountName, customerReferece";
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
-		List<Long> customerIds = CustomerIdFilter.parse(config.customerIds());
+		List<Long> customerIds = CustomerIdFilter.resolve(config.beneficiaryCustomerIds(), users);
 		String sql = "SELECT " + top + columns + " FROM " + config.paymentBeneficiariesTable()
 				+ (customerIds.isEmpty() ? "" : " WHERE customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
 

@@ -35,6 +35,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -949,6 +950,66 @@ class MigrationIntegrationTest {
 			transferCountUnfiltered = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
 		}
 		assertEquals(15, transferCountUnfiltered);
+	}
+
+	@Test
+	void resolvesUserNamesAndPerMigrationFiltersForCustomerIds() throws Exception {
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		BanksRepository banks = BanksRepository.load(connection, config);
+		BankBranchesRepository branches = BankBranchesRepository.load(connection, config.bankBranchesTable());
+		BillersRepository billers = BillersRepository.load(connection, config);
+		ProductsRepository products = ProductsRepository.load(connection, config);
+		String runTimestamp = "2026-07-20 10:00:00.000";
+
+		// "R000100" is Users.userName for id=100 - resolves to the same rows as filtering by the
+		// raw numeric id (see filtersEveryOutputByCustomerIdsWhenRequested's transferCount=4 for "100").
+		config.override("customer.ids", "R000100");
+		Path userNamePath = tempDir.resolve("beneficiary_username_filtered.csv");
+		int transferCountByUserName;
+		try (CsvWriter writer = new CsvWriter(userNamePath, BeneficiaryDetailsSchema.HEADER)) {
+			transferCountByUserName = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+		}
+		assertEquals(4, transferCountByUserName);
+
+		// A raw numeric id and a userName in the same list resolve together: customer_id=200 rows
+		// (1, 2, 3) + customer_id=100 rows (8, 9, 10, 15) = 7.
+		config.override("customer.ids", "200,R000100");
+		Path mixedPath = tempDir.resolve("beneficiary_mixed_filtered.csv");
+		int transferCountMixed;
+		try (CsvWriter writer = new CsvWriter(mixedPath, BeneficiaryDetailsSchema.HEADER)) {
+			transferCountMixed = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+		}
+		assertEquals(7, transferCountMixed);
+
+		// An unresolvable userName fails the run with a clear error instead of silently migrating
+		// everyone (dropping the filter) or every customer_id column value literally (it isn't one).
+		config.override("customer.ids", "NOT-A-REAL-USER");
+		Path badFilterPath = tempDir.resolve("beneficiary_bad_filter.csv");
+		try (CsvWriter writer = new CsvWriter(badFilterPath, BeneficiaryDetailsSchema.HEADER)) {
+			IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+					() -> TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries")));
+			assertTrue(ex.getMessage().contains("NOT-A-REAL-USER"), "error should name the bad token: " + ex.getMessage());
+		}
+
+		// --beneficiary-customer-ids / --transaction-customer-ids scope independently of
+		// --customer-ids, and fall back to it when not set.
+		config.override("customer.ids", "100");
+		config.override("beneficiary.customer.ids", "200");
+		Path scopedBeneficiaryPath = tempDir.resolve("beneficiary_scoped.csv");
+		int transferCountScoped;
+		try (CsvWriter writer = new CsvWriter(scopedBeneficiaryPath, BeneficiaryDetailsSchema.HEADER)) {
+			// beneficiary.customer.ids=200 overrides customer.ids=100 for this migration only.
+			transferCountScoped = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+		}
+		assertEquals(3, transferCountScoped, "customer_id=200 rows (1, 2, 3), not customer_id=100's");
+
+		Path scopedTransactionPath = tempDir.resolve("transaction_scoped.csv");
+		int transactionCountFallback;
+		try (CsvWriter writer = new CsvWriter(scopedTransactionPath, TransactionSchema.HEADER)) {
+			// transaction.customer.ids was never set, so this still falls back to customer.ids=100.
+			transactionCountFallback = TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(29, transactionCountFallback, "falls back to customer.ids=100, same as filtersEveryOutputByCustomerIdsWhenRequested");
 	}
 
 	/**

@@ -18,10 +18,13 @@ public final class CliOptions {
 	private final boolean splitByCountry;
 	private final String statusFilter;
 	private final String customerIds;
+	private final String beneficiaryCustomerIds;
+	private final String transactionCustomerIds;
 
 	CliOptions(boolean help, String configPath, String output, String outputCustomers, String outputTransactions,
 			String limit, boolean describeSchema, boolean skipBeneficiaries, boolean skipCustomers, boolean skipTransactions,
-			boolean splitByCountry, String statusFilter, String customerIds) {
+			boolean splitByCountry, String statusFilter, String customerIds, String beneficiaryCustomerIds,
+			String transactionCustomerIds) {
 		this.help = help;
 		this.configPath = configPath;
 		this.output = output;
@@ -35,6 +38,8 @@ public final class CliOptions {
 		this.splitByCountry = splitByCountry;
 		this.statusFilter = statusFilter;
 		this.customerIds = customerIds;
+		this.beneficiaryCustomerIds = beneficiaryCustomerIds;
+		this.transactionCustomerIds = transactionCustomerIds;
 	}
 
 	public boolean help() {
@@ -87,5 +92,13 @@ public final class CliOptions {
 
 	public Optional<String> customerIds() {
 		return Optional.ofNullable(customerIds);
+	}
+
+	public Optional<String> beneficiaryCustomerIds() {
+		return Optional.ofNullable(beneficiaryCustomerIds);
+	}
+
+	public Optional<String> transactionCustomerIds() {
+		return Optional.ofNullable(transactionCustomerIds);
 	}
 }

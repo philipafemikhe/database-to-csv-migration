@@ -30,7 +30,7 @@ public final class CustomerInfoSource {
 	public static int migrate(MigrationConfig config, UsersRepository users, BankBranchesRepository branches, DevicesRepository devices,
 			CountryPartnerRepository countries, CsvWriter writer, String runTimestamp, WarningCollector warnings) throws IOException {
 
-		List<Long> customerIds = CustomerIdFilter.parse(config.customerIds());
+		List<Long> customerIds = CustomerIdFilter.resolve(config.customerIds(), users);
 		Set<Long> customerIdFilter = customerIds.isEmpty() ? null : new HashSet<>(customerIds);
 
 		long start = System.currentTimeMillis();
