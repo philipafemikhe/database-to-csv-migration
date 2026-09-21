@@ -50,7 +50,7 @@ import java.sql.Timestamp;
  *                                         additionalParams.productGatewayCode; Malawi +
  *                                         Billers.gatewayCode "MWB"/"MWBPREP" (Water Board
  *                                         Postpaid/PrePaid Bills) -> the row's own product_id.
- *                                         Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYAO" ->
+ *                                         Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYO" ->
  *                                         additionalParams.utilityType; Zimbabwe +
  *                                         Billers.gatewayCode "NYARADZO" -> static "1"; Zimbabwe +
  *                                         Billers.gatewayCode "ZIMRA" -> static "Domestic";
@@ -181,7 +181,7 @@ public final class PaymentBeneficiaryMapper {
 		if (country == IswCountry.MALAWI && "TNMBUN".equalsIgnoreCase(billerGatewayCode)) {
 			return AdditionalParamsParser.firstText(json, "productGatewayCode");
 		}
-		if (country == IswCountry.ZIMBABWE && "CITYOFBULAWAYAO".equalsIgnoreCase(billerGatewayCode)) {
+		if (country == IswCountry.ZIMBABWE && "CITYOFBULAWAYO".equalsIgnoreCase(billerGatewayCode)) {
 			return AdditionalParamsParser.firstText(json, "utilityType");
 		}
 		if (country == IswCountry.ZIMBABWE) {

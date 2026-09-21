@@ -23,6 +23,10 @@ public enum IswCountry {
 		this.code = code;
 	}
 
+	public long id() {
+		return countryId;
+	}
+
 	public String code() {
 		return code;
 	}

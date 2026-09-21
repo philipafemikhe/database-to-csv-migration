@@ -16,27 +16,32 @@ import java.util.Set;
 
 /**
  * Transactions.DTYPE (the old system's ISW transaction type) + country + biller/product/bank
- * lookups -> the new dtype, per DTypeMappingRulesforTransactions.docx. Four ISW transaction types
- * (LocalTransfer, BillPayment, AirtimePurchase, InterBankTransfer), each with its own
- * country-specific rule (Malawi/Botswana/Zimbabwe/Zambia):
+ * lookups -> the new dtype, per DTypeMappingRulesforTransactions.docx. Five ISW transaction types
+ * (LocalTransfer, SchoolTransaction, BillPayment, AirtimePurchase, InterBankTransfer), each with
+ * its own country-specific rule (Malawi/Botswana/Zimbabwe/Zambia):
  *
  *   LocalTransfer      -> WIB, unconditionally.
- *   BillPayment        -> Malawi/Botswana: Billers.gatewayCode lookup by biller_id decides
- *                          IWL vs BILL; Zimbabwe/Zambia: always BILL.
+ *   SchoolTransaction  -> WIB, unconditionally (not in the original doc; added per a later
+ *                          correction - previously fell through to "unrecognized", dtype blank).
+ *   BillPayment        -> Malawi/Botswana: IWL when Billers.gatewayCode (by biller_id) is one of the
+ *                          wallet biller gateway codes (see isWalletBiller) OR the resolved product
+ *                          is one of WalletProductMapper's wallet products, else BILL;
+ *                          Zimbabwe/Zambia: always BILL.
  *   AirtimePurchase    -> Malawi: product_id resolves to a Products row; if that row is one of
  *                          WalletProductMapper's wallet products (by gatewayCode) -> IWL, else ->
  *                          BILL (not Billers - Airtime keys off the product, unlike BillPayment
  *                          which keys off the biller); everywhere else: always BILL.
  *   InterBankTransfer  -> Malawi: Banks.allowInstantTransfer by destinationBank_id (1->OBI,
- *                          0->OBR); Zimbabwe: destinationBank_id NULL->OBI(ZIPIT), else
+ *                          0->OBR); Zimbabwe: destinationBank_id NULL->OBZ(ZIPIT), else
  *                          OBR(RTGS); Botswana: always OBE; Zambia: wallet bank->IWL, else
  *                          allowInstantTransfer flag (0->OBR, 1->OBI).
  */
 public final class TransactionDTypeMapper {
 
 	private static final Set<String> MALAWI_BILLPAYMENT_WALLET_GATEWAY_CODES = Collections.unmodifiableSet(
-			new HashSet<>(Arrays.asList("simpo cash", "simpo agent deposits")));
-	private static final String BOTSWANA_BILLPAYMENT_WALLET_GATEWAY_CODE = "orange-b2c";
+			new HashSet<>(Arrays.asList("tnmagents", "comvivaagent", "comvivab2w")));
+	private static final Set<String> BOTSWANA_BILLPAYMENT_WALLET_GATEWAY_CODES = Collections.unmodifiableSet(
+			new HashSet<>(Arrays.asList("bw-orange-b2c", "bw-myzaka-b2w")));
 
 	private TransactionDTypeMapper() {
 	}
@@ -50,9 +55,10 @@ public final class TransactionDTypeMapper {
 		}
 		switch (isoTransactionType.trim().toUpperCase(Locale.ROOT)) {
 			case "LOCALTRANSFER":
+			case "SCHOOLTRANSACTION":
 				return "WIB";
 			case "BILLPAYMENT":
-				return billPayment(oldId, country, billerId, billers, warnings);
+				return billPayment(oldId, country, billerId, productId, billers, products, warnings);
 			case "AIRTIMEPURCHASE":
 				return airtimePurchase(oldId, country, productId, products, warnings);
 			case "INTERBANKTRANSFER":
@@ -63,19 +69,31 @@ public final class TransactionDTypeMapper {
 		}
 	}
 
-	private static String billPayment(long oldId, IswCountry country, Long billerId, BillersRepository billers, WarningCollector warnings) {
+	private static String billPayment(long oldId, IswCountry country, Long billerId, Long productId, BillersRepository billers,
+			ProductsRepository products, WarningCollector warnings) {
 		if (country == null) {
 			return unresolvedCountry(oldId, "BillPayment", warnings);
 		}
 		if (country == IswCountry.ZIMBABWE || country == IswCountry.ZAMBIA) {
 			return "BILL";
 		}
-		String gatewayCode = billerGatewayCodeOf(billerId, billers);
-		if (country == IswCountry.MALAWI) {
-			return gatewayCode != null && MALAWI_BILLPAYMENT_WALLET_GATEWAY_CODES.contains(gatewayCode.toLowerCase(Locale.ROOT)) ? "IWL" : "BILL";
+		if (isWalletBiller(country, billerGatewayCodeOf(billerId, billers))) {
+			return "IWL";
 		}
-		// Botswana
-		return BOTSWANA_BILLPAYMENT_WALLET_GATEWAY_CODE.equalsIgnoreCase(gatewayCode) ? "IWL" : "BILL";
+		ProductRecord product = productId == null ? null : products.findById(productId);
+		return WalletProductMapper.isWalletProduct(product) ? "IWL" : "BILL";
+	}
+
+	/** Malawi/Botswana Billers.gatewayCode values that mark a BillPayment as a wallet (IWL) transaction. */
+	public static boolean isWalletBiller(IswCountry country, String billerGatewayCode) {
+		if (billerGatewayCode == null) {
+			return false;
+		}
+		String normalized = billerGatewayCode.trim().toLowerCase(Locale.ROOT);
+		if (country == IswCountry.MALAWI) {
+			return MALAWI_BILLPAYMENT_WALLET_GATEWAY_CODES.contains(normalized);
+		}
+		return country == IswCountry.BOTSWANA && BOTSWANA_BILLPAYMENT_WALLET_GATEWAY_CODES.contains(normalized);
 	}
 
 	private static String airtimePurchase(long oldId, IswCountry country, Long productId, ProductsRepository products, WarningCollector warnings) {
@@ -103,7 +121,7 @@ public final class TransactionDTypeMapper {
 			return "OBE";
 		}
 		if (country == IswCountry.ZIMBABWE) {
-			return destinationBankId == null ? "OBI" : "OBR";
+			return destinationBankId == null ? "OBZ" : "OBR";
 		}
 
 		BankRecord bank = destinationBankId == null ? null : banks.findById(destinationBankId);

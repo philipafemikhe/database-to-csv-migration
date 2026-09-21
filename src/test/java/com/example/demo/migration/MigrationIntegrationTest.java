@@ -117,7 +117,7 @@ class MigrationIntegrationTest {
 
 			st.execute("CREATE TABLE dbo.Billers (id BIGINT, gatewayCode VARCHAR(50), name VARCHAR(100))");
 			st.execute("INSERT INTO dbo.Billers VALUES\n"
-					+ "  (10, 'Simpo Cash', 'Simpo Cash'),\n"
+					+ "  (10, 'COMVIVAAGENT', 'Simpo Cash'),\n"
 					+ "  (11, 'Random Biller', 'Random Biller'),\n"
 					+ "  (12, 'Orange-B2C', 'Orange B2C'),\n"
 					+ "  (13, 'Other BW Biller', 'Other BW Biller'),\n"
@@ -126,7 +126,7 @@ class MigrationIntegrationTest {
 					+ "  (90, 'BW-ORANGE-B2C', 'Orange Money'),\n"
 					+ "  (115, 'BW-MYZAKA-BW', 'Mascom MyZaka'),\n"
 					+ "  (32, 'TNMBUN', 'TNM Bundles'),\n"
-					+ "  (95, 'CITYOFBULAWAYAO', 'City of Bulawayo'),\n"
+					+ "  (95, 'CITYOFBULAWAYO', 'City of Bulawayo'),\n"
 					+ "  (200, 'NYARADZO', 'Nyaradzo Funeral Services'),\n"
 					+ "  (202, 'ZIMRA', 'Zimra'),\n"
 					+ "  (203, 'CIMAS', 'CIMAS Medical Aid Society'),\n"
@@ -253,7 +253,7 @@ class MigrationIntegrationTest {
 					+ "  ('LocalTransfer', 9001, 100.50, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK'),\n"
 					+ "  ('BillPayment', 9002, 500, 0, 100, NULL, 10, NULL, 1, 100, 'MWK'),\n"
 					+ "  ('BillPayment', 9003, 500, 0, 100, NULL, 11, NULL, 1, 100, 'MWK'),\n"
-					+ "  ('BillPayment', 9004, 500, 0, 100, NULL, 12, NULL, 2, 100, 'BWP'),\n"
+					+ "  ('BillPayment', 9004, 500, 0, 100, NULL, 90, NULL, 2, 100, 'BWP'),\n"
 					+ "  ('BillPayment', 9005, 500, 0, 100, NULL, 13, NULL, 2, 100, 'BWP'),\n"
 					+ "  ('BillPayment', 9006, 500, 0, 100, NULL, NULL, NULL, 3, 100, 'ZWG'),\n"
 					+ "  ('BillPayment', 9007, 500, 0, 100, NULL, NULL, NULL, 4, 100, 'ZMW'),\n"
@@ -278,7 +278,7 @@ class MigrationIntegrationTest {
 					+ "  ('BillPayment', 9026, 500, 0, 100, NULL, 999, NULL, 3, 100, 'ZWG'),\n"
 					+ "  ('InterBankTransfer', 9027, 1000, 0, 100, 115, NULL, NULL, 4, 100, 'ZMW'),\n"
 					+ "  ('BillPayment', 9028, 500, 0, 100, NULL, 10, 10296, 1, 100, 'MWK'),\n"
-					+ "  ('BillPayment', 9029, 500, 0, 100, NULL, 12, 10144, 2, 100, 'BWP'),\n"
+					+ "  ('BillPayment', 9029, 500, 0, 100, NULL, 90, 10144, 2, 100, 'BWP'),\n"
 					+ "  ('BillPayment', 9030, 500, 0, 100, NULL, 10, 14, 1, 100, 'MWK')\n");
 		}
 	}
@@ -515,7 +515,7 @@ class MigrationIntegrationTest {
 		CSVRecord p9 = byId.get(String.valueOf(508 + offset));
 		assertEquals("MW-ESCOM-GW-42", p9.get("admin_remarks"));
 
-		// Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYAO" -> admin_remarks always from
+		// Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYO" -> admin_remarks always from
 		// additionalParams.utilityType; product_id=10209 does NOT trigger an override (that product
 		// actually belongs to Zimra per a real Products extract, not City of Bulawayo).
 		CSVRecord p10 = byId.get(String.valueOf(509 + offset));
@@ -525,7 +525,7 @@ class MigrationIntegrationTest {
 		CSVRecord p11 = byId.get(String.valueOf(510 + offset));
 		assertEquals("Water", p11.get("admin_remarks"));
 
-		// Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYAO", no product_id at all -> same
+		// Zimbabwe + Billers.gatewayCode "CITYOFBULAWAYO", no product_id at all -> same
 		// utilityType passthrough.
 		CSVRecord p12 = byId.get(String.valueOf(511 + offset));
 		assertEquals("Commercial", p12.get("admin_remarks"));
@@ -772,9 +772,10 @@ class MigrationIntegrationTest {
 		assertEquals("IWL", byId.get("9002").get("dtype"));
 		// dtype IWL (not BILL) -> biller_gateway_code stays blank.
 		assertEquals("", byId.get("9002").get("biller_gateway_code"));
-		// product_id is NULL here, so wallet_type/wallet_code stay blank too even though dtype IWL.
-		assertEquals("", byId.get("9002").get("wallet_type"));
-		assertEquals("", byId.get("9002").get("wallet_code"));
+		// product_id is NULL here, so wallet_type/wallet_code fall back to the wallet biller's own
+		// Billers.name/gatewayCode (biller_id=10).
+		assertEquals("Simpo Cash", byId.get("9002").get("wallet_type"));
+		assertEquals("COMVIVAAGENT", byId.get("9002").get("wallet_code"));
 		assertEquals("BILL", byId.get("9003").get("dtype"));
 		// dtype BILL -> biller_gateway_code from Billers.gatewayCode (biller_id=11 -> "Random Biller").
 		assertEquals("Random Biller", byId.get("9003").get("biller_gateway_code"));
@@ -812,7 +813,8 @@ class MigrationIntegrationTest {
 		assertEquals("OBE", byId.get("9016").get("dtype"));
 
 		// InterBankTransfer, Zimbabwe: destinationBank_id NULL -> OBI (ZIPIT), else OBR (RTGS).
-		assertEquals("OBI", byId.get("9017").get("dtype"));
+		// Zimbabwe ZIPIT (no destination bank) -> OBZ, not OBI.
+		assertEquals("OBZ", byId.get("9017").get("dtype"));
 		assertEquals("OBR", byId.get("9018").get("dtype"));
 
 		// InterBankTransfer, Zambia: wallet bank wins over allowInstantTransfer -> IWL; otherwise the flag decides.
@@ -853,14 +855,14 @@ class MigrationIntegrationTest {
 		assertEquals("Zamtel Wallet", byId.get("9027").get("wallet_type"));
 		assertEquals("ZM-ZAMTEL", byId.get("9027").get("wallet_code"));
 
-		// BillPayment, Malawi, biller_id=10 ("Simpo Cash") -> dtype IWL; product_id=10296 resolves to
+		// BillPayment, Malawi, biller_id=10 (gatewayCode "COMVIVAAGENT") -> dtype IWL; product_id=10296 resolves to
 		// gatewayCode "COMVIVAAGENT", one of the fixed wallet product gateway codes
 		// (WalletProductMapper) -> wallet_type/wallet_code from Products.name/Products.gatewayCode.
 		assertEquals("IWL", byId.get("9028").get("dtype"));
 		assertEquals("Simpo Cash Agent Deposit", byId.get("9028").get("wallet_type"));
 		assertEquals("COMVIVAAGENT", byId.get("9028").get("wallet_code"));
 
-		// BillPayment, Botswana, biller_id=12 ("Orange-B2C") -> dtype IWL; product_id=10144 resolves
+		// BillPayment, Botswana, biller_id=90 (gatewayCode "BW-ORANGE-B2C") -> dtype IWL; product_id=10144 resolves
 		// to gatewayCode "BW-ORANGE-B2C", also one of the fixed wallet product gateway codes ->
 		// wallet_type/wallet_code from Products.
 		assertEquals("IWL", byId.get("9029").get("dtype"));
@@ -869,18 +871,96 @@ class MigrationIntegrationTest {
 
 		// BillPayment, Malawi, product_id=14 resolves to "TNM Airtime"/gatewayCode "TNMAIR" - a real
 		// Products row, but its gatewayCode isn't one of the fixed wallet product gateway codes, so
-		// wallet_type/wallet_code stay blank (dtype IWL is unaffected - it doesn't depend on Products
+		// wallet_type/wallet_code come from the wallet biller (biller_id=10) rather than Products (dtype IWL is unaffected - it doesn't depend on Products
 		// here). Proves the match is on the resolved product's gatewayCode, not merely on whether
 		// product_id resolves at all.
 		assertEquals("IWL", byId.get("9030").get("dtype"));
-		assertEquals("", byId.get("9030").get("wallet_type"));
-		assertEquals("", byId.get("9030").get("wallet_code"));
+		assertEquals("Simpo Cash", byId.get("9030").get("wallet_type"));
+		assertEquals("COMVIVAAGENT", byId.get("9030").get("wallet_code"));
 
 		// Warnings: unrecognized DTYPE(9022), unresolved customer_id(9023), unrecognized
 		// country_id(9024), unresolved destinationBank_id x2(9025), unresolved biller_id for
 		// biller_gateway_code(9026). (9010's product_id now resolves to a real, non-wallet product,
 		// so it's a plain BILL with no warning - see the AirtimePurchase assertions above.)
 		assertEquals(6, warnings.size(), "warnings: " + warnings.all());
+	}
+
+	@Test
+	void appliesTransactionCorrectionsForWalletBillersSchoolTransfersAndPendingAcknowledgement() throws Exception {
+		try (Statement st = connection.createStatement()) {
+			st.execute("INSERT INTO dbo.Billers VALUES\n"
+					+ "  (20, 'TNMAGENTS', 'TNM Agents'),\n"
+					+ "  (21, 'COMVIVAB2W', 'Simpo Transfer'),\n"
+					+ "  (22, 'BW-MYZAKA-B2W', 'Mascom MyZaka')\n");
+			st.execute("INSERT INTO dbo.Transactions\n"
+					+ "  (DTYPE, id, amount, charge, customer_id, destinationBank_id, biller_id, product_id, country_id, user_id, sourceAccountCurrency, status)\n"
+					+ "VALUES\n"
+					+ "  ('BillPayment', 9101, 500, 0, 100, NULL, 20, NULL, 1, 100, 'MWK', 'SUCCESSFUL'),\n"
+					+ "  ('BillPayment', 9102, 500, 0, 100, NULL, 21, NULL, 1, 100, 'MWK', 'SUCCESSFUL'),\n"
+					+ "  ('BillPayment', 9103, 500, 0, 100, NULL, 22, NULL, 2, 100, 'BWP', 'SUCCESSFUL'),\n"
+					+ "  ('SchoolTransaction', 9104, 750, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK', 'SUCCESSFUL'),\n"
+					+ "  ('LocalTransfer', 9105, 10, 0, 100, NULL, NULL, NULL, 2, 100, 'BWP', 'Payment pending acknowledgement'),\n"
+					+ "  ('LocalTransfer', 9106, 10, 0, 100, NULL, NULL, NULL, 4, 100, 'ZMW', 'PAYMENT_PENDING_ACKNOWLEDGEMENT'),\n"
+					+ "  ('LocalTransfer', 9107, 10, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK', 'Payment pending acknowledgement'),\n"
+					+ "  ('LocalTransfer', 9108, 10, 0, 100, NULL, NULL, NULL, 2, 100, 'BWP', 'FAILED'),\n"
+					+ "  ('LocalTransfer', 9109, 10, 0, 100, NULL, NULL, NULL, 2, 100, 'BWP', 'Pending')\n");
+		}
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		BanksRepository banks = BanksRepository.load(connection, config);
+		BillersRepository billers = BillersRepository.load(connection, config);
+		ProductsRepository products = ProductsRepository.load(connection, config);
+
+		Path outputPath = tempDir.resolve("transaction_corrections.csv");
+		try (CsvWriter writer = new CsvWriter(outputPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		Map<String, CSVRecord> byId = readCsvById(outputPath, TransactionSchema.HEADER, "id");
+
+		// Malawi wallet billers (gatewayCode TNMAGENTS/COMVIVAB2W) -> IWL, with wallet_type/wallet_code
+		// carried over from the biller since product_id doesn't resolve to a wallet product.
+		assertEquals("IWL", byId.get("9101").get("dtype"));
+		assertEquals("TNM Agents", byId.get("9101").get("wallet_type"));
+		assertEquals("TNMAGENTS", byId.get("9101").get("wallet_code"));
+		assertEquals("", byId.get("9101").get("biller_gateway_code"));
+		assertEquals("IWL", byId.get("9102").get("dtype"));
+		assertEquals("COMVIVAB2W", byId.get("9102").get("wallet_code"));
+
+		// Botswana wallet biller BW-MYZAKA-B2W -> IWL.
+		assertEquals("IWL", byId.get("9103").get("dtype"));
+		assertEquals("BW-MYZAKA-B2W", byId.get("9103").get("wallet_code"));
+
+		// SchoolTransaction -> WIB.
+		assertEquals("WIB", byId.get("9104").get("dtype"));
+
+		// Payment pending acknowledgement counts as successful in Botswana/Zambia only.
+		assertEquals("SUCCESSFUL", byId.get("9105").get("status"));
+		assertEquals("SUCCESSFUL", byId.get("9106").get("status"));
+		assertEquals("Payment pending acknowledgement", byId.get("9107").get("status"));
+
+		// --status-filter=SUCCESSFUL keeps the BW/ZM pending-acknowledgement rows (9105/9106) but not
+		// the Malawi one (9107) or the failed row (9108); FAILED is unaffected.
+		config.override("status.filter", "SUCCESSFUL");
+		Path successPath = tempDir.resolve("transaction_success.csv");
+		try (CsvWriter writer = new CsvWriter(successPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		Map<String, CSVRecord> successful = readCsvById(successPath, TransactionSchema.HEADER, "id");
+		assertEquals(java.util.Set.of("9101", "9102", "9103", "9104", "9105", "9106"), successful.keySet());
+
+		config.override("status.filter", "FAILED");
+		Path failedPath = tempDir.resolve("transaction_failed.csv");
+		try (CsvWriter writer = new CsvWriter(failedPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(java.util.Set.of("9108"), readCsvById(failedPath, TransactionSchema.HEADER, "id").keySet());
+
+		// PENDING matches status "PENDING" only - the BW/ZM pending-acknowledgement rows are successful.
+		config.override("status.filter", "pending");
+		Path pendingPath = tempDir.resolve("transaction_pending.csv");
+		try (CsvWriter writer = new CsvWriter(pendingPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(java.util.Set.of("9109"), readCsvById(pendingPath, TransactionSchema.HEADER, "id").keySet());
 	}
 
 	@Test

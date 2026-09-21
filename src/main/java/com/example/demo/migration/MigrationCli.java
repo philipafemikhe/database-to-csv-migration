@@ -82,7 +82,7 @@ public final class MigrationCli {
 				+ "  --output-transactions   Overrides 'output.transactions': where to write transaction.csv.\n"
 				+ "  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).\n"
 				+ "  --status-filter         Overrides 'status.filter': only migrate Transactions rows with this status\n"
-				+ "                         (SUCCESS/SUCCESSFUL or FAILED, case-insensitive). Omit to migrate all statuses.\n"
+				+ "                         (SUCCESS/SUCCESSFUL, FAILED or PENDING, case-insensitive). Omit to migrate all statuses.\n"
 				+ "  --customer-ids          Overrides 'customer.ids': a comma-separated list of customer ids\n"
 				+ "                         (e.g. --customer-ids=101,102,R0540050 - each token may be a raw numeric\n"
 				+ "                         customer_id or a Users.userName, resolved against the Users table). Restricts\n"

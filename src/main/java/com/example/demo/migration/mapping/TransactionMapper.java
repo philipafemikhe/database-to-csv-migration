@@ -34,10 +34,15 @@ import java.sql.SQLException;
  *   wallet_type / wallet_code <- per MigrationCorrection_Wallets.docx: Malawi/Botswana rows join
  *                             Products by product_id, then check the resolved Products.gatewayCode
  *                             against a fixed set of wallet product gateway codes (see
- *                             WalletProductMapper) -> Products.name / Products.gatewayCode; Zambia
+ *                             WalletProductMapper) -> Products.name / Products.gatewayCode; failing
+ *                             that, a dtype=IWL row whose Billers.gatewayCode is a wallet biller
+ *                             (TransactionDTypeMapper.isWalletBiller) -> Billers.name /
+ *                             Billers.gatewayCode; Zambia
  *                             rows join Banks by destinationBank_id, only when that bank has
  *                             allowInstantTransfer=1 and a WALLET institution -> Banks.name /
  *                             Banks.code. Blank everywhere else.
+ *   status                <- copied verbatim, except Botswana/Zambia "Payment pending acknowledgement"
+ *                             which counts as SUCCESSFUL (see TransactionStatus)
  *   everything else       <- copied verbatim from the matching Transactions column
  */
 public final class TransactionMapper {
@@ -102,6 +107,8 @@ public final class TransactionMapper {
 			}
 		}
 
+		status = TransactionStatus.normalize(country, status);
+
 		String dtype = TransactionDTypeMapper.map(oldId, isoType, country, billerId, productId, destinationBankId, billers, products, banks, warnings);
 
 		String billerGatewayCode = null;
@@ -124,6 +131,15 @@ public final class TransactionMapper {
 			if (product != null && WalletProductMapper.isWalletProduct(product)) {
 				walletType = product.name();
 				walletCode = product.gatewayCode();
+			} else if ("IWL".equals(dtype)) {
+				// A wallet BillPayment identified by its biller (e.g. TNMAGENTS, BW-ORANGE-B2C) whose
+				// product doesn't itself resolve to a wallet product: carry the biller's own
+				// name/gatewayCode as wallet_type/wallet_code instead of leaving them blank.
+				BillerRecord biller = billerId == null ? null : billers.findById(billerId);
+				if (biller != null && TransactionDTypeMapper.isWalletBiller(country, biller.gatewayCode())) {
+					walletType = biller.name();
+					walletCode = biller.gatewayCode();
+				}
 			}
 		} else if (country == IswCountry.ZAMBIA && destinationBankId != null) {
 			BankRecord destinationBank = banks.findById(destinationBankId);

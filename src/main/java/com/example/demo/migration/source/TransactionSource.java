@@ -5,6 +5,7 @@ import com.example.demo.migration.csv.RecordWriter;
 import com.example.demo.migration.db.CustomerIdFilter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.TransactionMapper;
+import com.example.demo.migration.mapping.TransactionStatus;
 import com.example.demo.migration.repo.BanksRepository;
 import com.example.demo.migration.repo.BillersRepository;
 import com.example.demo.migration.repo.ProductsRepository;
@@ -44,7 +45,11 @@ public final class TransactionSource {
 
 		List<String> conditions = new ArrayList<>();
 		if (statusFilter != null) {
-			conditions.add("UPPER(status) = ?");
+			String condition = "UPPER(status) = ?";
+			if (TransactionStatus.SUCCESSFUL.equals(statusFilter)) {
+				condition = "(" + condition + " OR " + TransactionStatus.successfulPendingAcknowledgementSql("status", "country_id") + ")";
+			}
+			conditions.add(condition);
 		}
 		if (!customerIds.isEmpty()) {
 			conditions.add("customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
@@ -85,9 +90,9 @@ public final class TransactionSource {
 		if (upper.equals("SUCCESS")) {
 			return "SUCCESSFUL";
 		}
-		if (upper.equals("SUCCESSFUL") || upper.equals("FAILED")) {
+		if (upper.equals("SUCCESSFUL") || upper.equals("FAILED") || upper.equals("PENDING")) {
 			return upper;
 		}
-		throw new IllegalArgumentException("Unrecognized status.filter/--status-filter value '" + raw + "'; expected SUCCESS, SUCCESSFUL, or FAILED");
+		throw new IllegalArgumentException("Unrecognized status.filter/--status-filter value '" + raw + "'; expected SUCCESS, SUCCESSFUL, FAILED, or PENDING");
 	}
 }

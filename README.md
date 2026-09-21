@@ -53,7 +53,7 @@ Useful flags:
 - `--output=path.csv` / `--output-customers=path.csv` / `--output-transactions=path.csv` —
   override any output path for this run.
 - `--limit=N` — cap rows read per source table (dry run against a test DB).
-- `--status-filter=SUCCESSFUL` (or `SUCCESS`) / `--status-filter=FAILED` — only migrate
+- `--status-filter=SUCCESSFUL` (or `SUCCESS`) / `--status-filter=FAILED` / `--status-filter=PENDING` — only migrate
   Transactions rows with that `status` (case-insensitive; `SUCCESS` is treated as an alias for
   `SUCCESSFUL`). Omit to migrate every status.
 - `--customer-ids=101,102,R0540050` — restrict every migration to just those customers by default.
@@ -192,7 +192,7 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
     Malawi + `Billers.gatewayCode` is `"AIRTEL"` → `additionalParams.productGatewayCode`; Malawi +
     `Billers.gatewayCode` is `"MWB"` (Water Board Postpaid Bills) or `"MWBPREP"` (Water Board
     PrePaid Bills) → the row's own `product_id`. Zimbabwe + `Billers.gatewayCode` is
-    `"CITYOFBULAWAYAO"` → `additionalParams.utilityType`; Zimbabwe + `Billers.gatewayCode` is
+    `"CITYOFBULAWAYO"` → `additionalParams.utilityType`; Zimbabwe + `Billers.gatewayCode` is
     `"NYARADZO"` → static `"1"`; Zimbabwe + `Billers.gatewayCode` is `"ZIMRA"` → static `"Domestic"`;
     Zimbabwe + `Billers.gatewayCode` is `"CIMAS"` → `additionalParams.referenceType`. Blank for
     everything else.
@@ -250,18 +250,19 @@ from that spreadsheet's "Target Field" column, inconsistent casing and all.
   this does **not** go through the dynamic `CountryPartner` lookup.
 - `dtype` is derived from the old `DTYPE` (ISW transaction type) plus country and biller/bank
   lookups, per `DTypeMappingRulesforTransactions.docx`:
-  - `LocalTransfer` → `WIB`, unconditionally.
-  - `BillPayment` → Zimbabwe/Zambia: always `BILL`. Malawi/Botswana: `Billers.gatewayCode`
-    (looked up by `biller_id`) decides — Malawi's `"Simpo Cash"`/`"Simpo Agent Deposits"` and
-    Botswana's `"Orange-B2C"` map to `IWL`; everything else (including an unresolved biller) is
-    `BILL`.
+  - `LocalTransfer` and `SchoolTransaction` → `WIB`, unconditionally.
+  - `BillPayment` → Zimbabwe/Zambia: always `BILL`. Malawi/Botswana: `IWL` when
+    `Billers.gatewayCode` (looked up by `biller_id`) is a wallet biller — Malawi `TNMAGENTS`/
+    `COMVIVAAGENT`/`COMVIVAB2W`, Botswana `BW-ORANGE-B2C`/`BW-MYZAKA-B2W` — or when the row's
+    resolved product is one of the wallet products (`WalletProductMapper`); everything else
+    (including an unresolved biller) is `BILL`.
   - `AirtimePurchase` → Botswana/Zimbabwe/Zambia: always `BILL`. Malawi: looks up `product_id` in
     `Products` (**not** `Billers`/`biller_id` - Airtime keys off the product, unlike BillPayment
     which keys off the biller) and decides via the same wallet-product gatewayCode check used for
     `wallet_type`/`wallet_code` elsewhere (see `WalletProductMapper`) — a wallet product → `IWL`,
     any other resolvable product → `BILL`; an unresolvable `product_id` is left blank (warned).
   - `InterBankTransfer` → Botswana: always `OBE`. Zimbabwe: `destinationBank_id` is `NULL` →
-    `OBI` (ZIPIT), otherwise `OBR` (RTGS) — no bank lookup needed. Malawi:
+    `OBZ` (ZIPIT), otherwise `OBR` (RTGS) — no bank lookup needed. Malawi:
     `Banks.allowInstantTransfer` by `destinationBank_id` (`true`→`OBI`, `false`→`OBR`). Zambia:
     a wallet-institution bank always wins → `IWL`; otherwise the same `allowInstantTransfer` flag
     (`true`→`OBI`, `false`→`OBR`) — the same wallet-clubbing behavior as
@@ -281,13 +282,18 @@ from that spreadsheet's "Target Field" column, inconsistent casing and all.
   instead join `Banks` by `destinationBank_id`, only when that bank has `allowInstantTransfer=1`
   and a `WALLET` institution → `Banks.name` / `Banks.code` (same criteria as the Zambia wallet
   exception used elsewhere, but applied independently of `dtype` here rather than gating on it).
-  Blank everywhere else. These two columns didn't exist in the `transaction` target schema before
+  For Malawi/Botswana rows that end up `IWL` because their *biller* is a wallet biller (above) but
+  whose product isn't a wallet product, the biller's `Billers.name` / `Billers.gatewayCode` are used
+  instead. Blank everywhere else. These two columns didn't exist in the `transaction` target schema before
   this correction.
 - Every `Transactions` row-level validation warning that involves a resolved country now logs it
   (e.g. `country=MALAWI`) alongside the id, so a support engineer can tell at a glance which
   country's rules produced a given warning without cross-referencing the row.
 - `--status-filter` (see Run below) restricts this migration to `Transactions` rows matching a
-  given `status` (`SUCCESSFUL`/`SUCCESS` or `FAILED`); omitted, every status is migrated.
+  given `status` (`SUCCESSFUL`/`SUCCESS`, `FAILED` or `PENDING`); omitted, every status is migrated. For
+  Botswana and Zambia, a `status` of "Payment pending acknowledgement" (case-insensitive, spaces or
+  underscores) counts as successful: those rows are included by `SUCCESSFUL` (and not by `FAILED` or `PENDING`),
+  and their `status` is written out as `SUCCESSFUL`. Other countries' pending rows are untouched.
 - `destinationaccountname` ← `destinationAccountName`, copied unconditionally for every transaction
   type including bill payments (it's a direct copy like the rest of the fields in the first bullet
   above - there's no dtype-based gating on it).
