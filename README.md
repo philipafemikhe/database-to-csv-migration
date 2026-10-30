@@ -56,6 +56,9 @@ Useful flags:
 - `--status-filter=SUCCESSFUL` (or `SUCCESS`) / `--status-filter=FAILED` / `--status-filter=PENDING` — only migrate
   Transactions rows with that `status` (case-insensitive; `SUCCESS` is treated as an alias for
   `SUCCESSFUL`). Omit to migrate every status.
+- `--transaction-months=N` (property `transaction.months`, default `3`) — only migrate Transactions
+  rows from the last N months, counted from the start of the run date. Rows with a NULL
+  `transactionDate` are excluded. `0` migrates every transaction.
 - `--customer-ids=101,102,R0540050` — restrict every migration to just those customers by default.
   Each comma-separated token may be a raw numeric `customer_id`/`Users.id`, or a `Users.userName`
   (e.g. `R0540050`) resolved against the already-loaded Users table - an unresolvable userName
@@ -294,6 +297,8 @@ from that spreadsheet's "Target Field" column, inconsistent casing and all.
   Botswana and Zambia, a `status` of "Payment pending acknowledgement" (case-insensitive, spaces or
   underscores) counts as successful: those rows are included by `SUCCESSFUL` (and not by `FAILED` or `PENDING`),
   and their `status` is written out as `SUCCESSFUL`. Other countries' pending rows are untouched.
+- `--transaction-months` (see Run below) limits this migration to the last 3 months of
+  `Transactions` by default; see that flag for how the cutoff works and how to turn it off.
 - `destinationaccountname` ← `destinationAccountName`, copied unconditionally for every transaction
   type including bill payments (it's a direct copy like the rest of the fields in the first bullet
   above - there's no dtype-based gating on it).

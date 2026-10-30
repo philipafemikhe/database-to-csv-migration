@@ -13,7 +13,7 @@ import java.util.Properties;
  * Expected properties - see migration.properties.example for the full, documented list:
  *   db.url, db.username, db.password, db.driver
  *   output, output.customerInfo, output.transactions, payment.id.offset, row.limit
- *   status.filter, customer.ids, beneficiary.customer.ids, transaction.customer.ids
+ *   status.filter, transaction.months, customer.ids, beneficiary.customer.ids, transaction.customer.ids
  *   users.table, transferBeneficiaries.table, paymentBeneficiaries.table, bankBranches.table,
  *     devices.table, transactions.table
  *   banks.table, banks.column.id, banks.column.name, banks.column.swiftCode,
@@ -95,6 +95,15 @@ public final class MigrationConfig {
 
 	public String statusFilter() {
 		return get("status.filter", null);
+	}
+
+	/** How many months back to migrate Transactions, counted from the run date; 0 migrates all of them. */
+	public int transactionMonths() {
+		int months = Integer.parseInt(get("transaction.months", "3").trim());
+		if (months < 0) {
+			throw new IllegalArgumentException("transaction.months/--transaction-months must be 0 or greater, got " + months);
+		}
+		return months;
 	}
 
 	public String customerIds() {

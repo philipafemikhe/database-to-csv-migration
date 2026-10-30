@@ -51,6 +51,7 @@ public final class MigrationCli {
 			options.outputTransactions().ifPresent(v -> config.override("output.transactions", v));
 			options.limit().ifPresent(v -> config.override("row.limit", v));
 			options.statusFilter().ifPresent(v -> config.override("status.filter", v));
+			options.transactionMonths().ifPresent(v -> config.override("transaction.months", v));
 			options.customerIds().ifPresent(v -> config.override("customer.ids", v));
 			options.beneficiaryCustomerIds().ifPresent(v -> config.override("beneficiary.customer.ids", v));
 			options.transactionCustomerIds().ifPresent(v -> config.override("transaction.customer.ids", v));
@@ -83,6 +84,9 @@ public final class MigrationCli {
 				+ "  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).\n"
 				+ "  --status-filter         Overrides 'status.filter': only migrate Transactions rows with this status\n"
 				+ "                         (SUCCESS/SUCCESSFUL, FAILED or PENDING, case-insensitive). Omit to migrate all statuses.\n"
+				+ "  --transaction-months    Overrides 'transaction.months' (default 3): only migrate Transactions rows from\n"
+				+ "                         the last N months, counted from the run date. Rows with no transactionDate\n"
+				+ "                         are excluded. 0 migrates every transaction.\n"
 				+ "  --customer-ids          Overrides 'customer.ids': a comma-separated list of customer ids\n"
 				+ "                         (e.g. --customer-ids=101,102,R0540050 - each token may be a raw numeric\n"
 				+ "                         customer_id or a Users.userName, resolved against the Users table). Restricts\n"

@@ -39,6 +39,7 @@ public final class ArgParser {
 				raw.get("status-filter"),
 				raw.get("customer-ids"),
 				raw.get("beneficiary-customer-ids"),
-				raw.get("transaction-customer-ids"));
+				raw.get("transaction-customer-ids"),
+				raw.get("transaction-months"));
 	}
 }

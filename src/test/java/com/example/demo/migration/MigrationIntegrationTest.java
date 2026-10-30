@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,6 +60,8 @@ class MigrationIntegrationTest {
 		Path propsFile = tempDir.resolve("migration.properties");
 		String propsContent = String.format(
 				"db.url=%s\n"
+				// The Transactions fixtures have no transactionDate, so they'd all fall outside the default window.
+				+ "transaction.months=0\n"
 				+ "banks.column.id=bankId\n"
 				+ "banks.column.name=bankName\n"
 				+ "banks.column.swiftCode=swift\n"
@@ -961,6 +964,58 @@ class MigrationIntegrationTest {
 			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
 		}
 		assertEquals(java.util.Set.of("9109"), readCsvById(pendingPath, TransactionSchema.HEADER, "id").keySet());
+	}
+
+	@Test
+	void restrictsTransactionsToTheConfiguredNumberOfMonths() throws Exception {
+		LocalDate today = LocalDate.now();
+		try (Statement st = connection.createStatement()) {
+			st.execute("DELETE FROM dbo.Transactions");
+			st.execute("INSERT INTO dbo.Transactions\n"
+					+ "  (DTYPE, id, amount, charge, customer_id, country_id, user_id, sourceAccountCurrency, transactionDate)\n"
+					+ "VALUES\n"
+					+ "  ('LocalTransfer', 9201, 10, 0, 100, 1, 100, 'MWK', '" + today.atTime(1, 0) + "'),\n"
+					+ "  ('LocalTransfer', 9202, 10, 0, 100, 1, 100, 'MWK', '" + today.minusMonths(3).atStartOfDay() + "'),\n"
+					+ "  ('LocalTransfer', 9203, 10, 0, 100, 1, 100, 'MWK', '" + today.minusMonths(3).minusDays(1).atTime(23, 59, 59) + "'),\n"
+					+ "  ('LocalTransfer', 9204, 10, 0, 100, 1, 100, 'MWK', '" + today.minusMonths(5).atStartOfDay() + "'),\n"
+					+ "  ('LocalTransfer', 9205, 10, 0, 100, 1, 100, 'MWK', NULL)\n");
+		}
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		BanksRepository banks = BanksRepository.load(connection, config);
+		BillersRepository billers = BillersRepository.load(connection, config);
+		ProductsRepository products = ProductsRepository.load(connection, config);
+
+		// Unset, the window defaults to 3 months: the cutoff day counts, the day before it and NULL dates don't.
+		Path defaultProps = tempDir.resolve("default-months.properties");
+		Files.write(defaultProps, "db.url=unused\n".getBytes(StandardCharsets.UTF_8));
+		Path defaultPath = tempDir.resolve("transaction_default_months.csv");
+		try (CsvWriter writer = new CsvWriter(defaultPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, MigrationConfig.load(defaultProps), users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(java.util.Set.of("9201", "9202"), readCsvById(defaultPath, TransactionSchema.HEADER, "id").keySet());
+
+		config.override("transaction.months", "6");
+		Path sixMonthsPath = tempDir.resolve("transaction_six_months.csv");
+		try (CsvWriter writer = new CsvWriter(sixMonthsPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(java.util.Set.of("9201", "9202", "9203", "9204"), readCsvById(sixMonthsPath, TransactionSchema.HEADER, "id").keySet());
+
+		// Combines with the other filters: the date parameter binds after the status and customer ones.
+		config.override("transaction.months", "3");
+		config.override("customer.ids", "100");
+		config.override("status.filter", "SUCCESSFUL");
+		try (Statement st = connection.createStatement()) {
+			st.execute("UPDATE dbo.Transactions SET status = 'SUCCESSFUL' WHERE id IN (9201, 9203)");
+		}
+		Path combinedPath = tempDir.resolve("transaction_combined_filters.csv");
+		try (CsvWriter writer = new CsvWriter(combinedPath, TransactionSchema.HEADER)) {
+			TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(java.util.Set.of("9201"), readCsvById(combinedPath, TransactionSchema.HEADER, "id").keySet());
+
+		config.override("transaction.months", "-1");
+		assertThrows(IllegalArgumentException.class, () -> config.transactionMonths());
 	}
 
 	@Test

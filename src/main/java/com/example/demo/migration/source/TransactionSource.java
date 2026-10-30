@@ -18,6 +18,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +57,14 @@ public final class TransactionSource {
 		if (!customerIds.isEmpty()) {
 			conditions.add("customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
 		}
+		int months = config.transactionMonths();
+		// Whole days, so every run on the same day picks the same cutoff. Rows with a NULL
+		// transactionDate don't satisfy the comparison and are excluded along with the old ones.
+		LocalDateTime cutoff = months == 0 ? null : LocalDate.now().minusMonths(months).atStartOfDay();
+		if (cutoff != null) {
+			conditions.add("transactionDate >= ?");
+			log.info("Transactions: restricting to the last {} month(s), transactionDate >= {}", months, cutoff);
+		}
 		String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
 		String sql = "SELECT " + top + columns + " FROM " + config.transactionsTable() + where;
 
@@ -67,6 +78,9 @@ public final class TransactionSource {
 			}
 			for (Long customerId : customerIds) {
 				st.setLong(paramIndex++, customerId);
+			}
+			if (cutoff != null) {
+				st.setTimestamp(paramIndex++, Timestamp.valueOf(cutoff));
 			}
 			try (ResultSet rs = st.executeQuery()) {
 				while (rs.next()) {

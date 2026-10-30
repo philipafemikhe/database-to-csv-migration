@@ -25,6 +25,11 @@ payment.id.offset=900000000
 # Uncomment to cap rows read per source table, e.g. for a dry run against a test DB.
 # row.limit=100
 
+# Only migrate Transactions from the last N months, counted from the run date (whole days, so
+# a run on 30 Oct with the default of 3 starts at 30 Jul 00:00). Rows with no transactionDate are
+# excluded. Set to 0 to migrate every transaction.
+# transaction.months=3
+
 # --- Source table names (override only if your schema differs from Migration_TableScripts.txt) ---
 # users.table=dbo.Users
 # transferBeneficiaries.table=dbo.TransferBeneficiaries
