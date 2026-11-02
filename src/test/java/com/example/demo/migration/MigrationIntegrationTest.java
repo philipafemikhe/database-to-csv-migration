@@ -802,7 +802,7 @@ class MigrationIntegrationTest {
 		assertEquals("IWL", byId.get("9009").get("dtype"));
 		assertEquals("BILL", byId.get("9010").get("dtype"));
 
-		// AirtimePurchase, Botswana/Zimbabwe/Zambia: always BILL.
+		// AirtimePurchase, Zimbabwe/Zambia: always BILL. Botswana with no wallet biller/product: BILL.
 		assertEquals("BILL", byId.get("9011").get("dtype"));
 		assertEquals("BILL", byId.get("9012").get("dtype"));
 		assertEquals("BILL", byId.get("9013").get("dtype"));
@@ -906,7 +906,10 @@ class MigrationIntegrationTest {
 					+ "  ('LocalTransfer', 9106, 10, 0, 100, NULL, NULL, NULL, 4, 100, 'ZMW', 'PAYMENT_PENDING_ACKNOWLEDGEMENT'),\n"
 					+ "  ('LocalTransfer', 9107, 10, 0, 100, NULL, NULL, NULL, 1, 100, 'MWK', 'Payment pending acknowledgement'),\n"
 					+ "  ('LocalTransfer', 9108, 10, 0, 100, NULL, NULL, NULL, 2, 100, 'BWP', 'FAILED'),\n"
-					+ "  ('LocalTransfer', 9109, 10, 0, 100, NULL, NULL, NULL, 2, 100, 'BWP', 'Pending')\n");
+					+ "  ('LocalTransfer', 9109, 10, 0, 100, NULL, NULL, NULL, 2, 100, 'BWP', 'Pending'),\n"
+					+ "  ('AirtimePurchase', 9110, 50, 0, 100, NULL, 90, 10144, 2, 100, 'BWP', NULL),\n"
+					+ "  ('AirtimePurchase', 9111, 50, 0, 100, NULL, NULL, 10144, 2, 100, 'BWP', NULL),\n"
+					+ "  ('AirtimePurchase', 9112, 50, 0, 100, NULL, NULL, 16, 2, 100, 'BWP', NULL)\n");
 		}
 		UsersRepository users = UsersRepository.load(connection, config.usersTable());
 		BanksRepository banks = BanksRepository.load(connection, config);
@@ -931,6 +934,15 @@ class MigrationIntegrationTest {
 		// Botswana wallet biller BW-MYZAKA-B2W -> IWL.
 		assertEquals("IWL", byId.get("9103").get("dtype"));
 		assertEquals("BW-MYZAKA-B2W", byId.get("9103").get("wallet_code"));
+
+		// Botswana Orange Money Bank to Wallet is booked as AirtimePurchase: IWL via the biller or the
+		// product alone; a non-wallet Botswana airtime product stays BILL.
+		assertEquals("IWL", byId.get("9110").get("dtype"));
+		assertEquals("Orange Money Bank to Wallet", byId.get("9110").get("wallet_type"));
+		assertEquals("BW-ORANGE-B2C", byId.get("9110").get("wallet_code"));
+		assertEquals("", byId.get("9110").get("biller_gateway_code"));
+		assertEquals("IWL", byId.get("9111").get("dtype"));
+		assertEquals("BILL", byId.get("9112").get("dtype"));
 
 		// SchoolTransaction -> WIB.
 		assertEquals("WIB", byId.get("9104").get("dtype"));

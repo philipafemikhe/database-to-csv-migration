@@ -259,7 +259,10 @@ from that spreadsheet's "Target Field" column, inconsistent casing and all.
     `COMVIVAAGENT`/`COMVIVAB2W`, Botswana `BW-ORANGE-B2C`/`BW-MYZAKA-B2W` — or when the row's
     resolved product is one of the wallet products (`WalletProductMapper`); everything else
     (including an unresolved biller) is `BILL`.
-  - `AirtimePurchase` → Botswana/Zimbabwe/Zambia: always `BILL`. Malawi: looks up `product_id` in
+  - `AirtimePurchase` → Zimbabwe/Zambia: always `BILL`. Botswana: the same wallet biller/product
+    check as `BillPayment` — Orange Money Bank to Wallet is booked as an `AirtimePurchase` (biller
+    `BW-ORANGE-B2C`, `product_id` 10144) and goes to `IWL`; Orange/Mascom airtime stays `BILL`.
+    Malawi: looks up `product_id` in
     `Products` (**not** `Billers`/`biller_id` - Airtime keys off the product, unlike BillPayment
     which keys off the biller) and decides via the same wallet-product gatewayCode check used for
     `wallet_type`/`wallet_code` elsewhere (see `WalletProductMapper`) — a wallet product → `IWL`,

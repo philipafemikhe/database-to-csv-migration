@@ -30,7 +30,9 @@ import java.util.Set;
  *   AirtimePurchase    -> Malawi: product_id resolves to a Products row; if that row is one of
  *                          WalletProductMapper's wallet products (by gatewayCode) -> IWL, else ->
  *                          BILL (not Billers - Airtime keys off the product, unlike BillPayment
- *                          which keys off the biller); everywhere else: always BILL.
+ *                          which keys off the biller); Botswana: same wallet biller/product check
+ *                          as BillPayment (Orange Money Bank to Wallet is booked as an
+ *                          AirtimePurchase); Zimbabwe/Zambia: always BILL.
  *   InterBankTransfer  -> Malawi: Banks.allowInstantTransfer by destinationBank_id (1->OBI,
  *                          0->OBR); Zimbabwe: destinationBank_id NULL->OBZ(ZIPIT), else
  *                          OBR(RTGS); Botswana: always OBE; Zambia: wallet bank->IWL, else
@@ -60,7 +62,7 @@ public final class TransactionDTypeMapper {
 			case "BILLPAYMENT":
 				return billPayment(oldId, country, billerId, productId, billers, products, warnings);
 			case "AIRTIMEPURCHASE":
-				return airtimePurchase(oldId, country, productId, products, warnings);
+				return airtimePurchase(oldId, country, billerId, productId, billers, products, warnings);
 			case "INTERBANKTRANSFER":
 				return interBankTransfer(oldId, country, destinationBankId, banks, warnings);
 			default:
@@ -77,6 +79,11 @@ public final class TransactionDTypeMapper {
 		if (country == IswCountry.ZIMBABWE || country == IswCountry.ZAMBIA) {
 			return "BILL";
 		}
+		return walletBillerOrProduct(country, billerId, productId, billers, products);
+	}
+
+	private static String walletBillerOrProduct(IswCountry country, Long billerId, Long productId, BillersRepository billers,
+			ProductsRepository products) {
 		if (isWalletBiller(country, billerGatewayCodeOf(billerId, billers))) {
 			return "IWL";
 		}
@@ -96,9 +103,15 @@ public final class TransactionDTypeMapper {
 		return country == IswCountry.BOTSWANA && BOTSWANA_BILLPAYMENT_WALLET_GATEWAY_CODES.contains(normalized);
 	}
 
-	private static String airtimePurchase(long oldId, IswCountry country, Long productId, ProductsRepository products, WarningCollector warnings) {
+	private static String airtimePurchase(long oldId, IswCountry country, Long billerId, Long productId, BillersRepository billers,
+			ProductsRepository products, WarningCollector warnings) {
 		if (country == null) {
 			return unresolvedCountry(oldId, "AirtimePurchase", warnings);
+		}
+		if (country == IswCountry.BOTSWANA) {
+			// Orange Money Bank to Wallet is recorded as an AirtimePurchase (biller BW-ORANGE-B2C,
+			// product_id 10144), so Botswana gets the same wallet check as BillPayment.
+			return walletBillerOrProduct(country, billerId, productId, billers, products);
 		}
 		if (country != IswCountry.MALAWI) {
 			return "BILL";
