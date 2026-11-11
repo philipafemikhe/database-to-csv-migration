@@ -71,6 +71,13 @@ Useful flags:
   customer's Transactions but only some customers' beneficiaries). Each falls back to
   `--customer-ids` when omitted, so passing only `--customer-ids` still restricts every migration
   as before.
+- `--customer-usernames=R0540050,0999123456` (property `customer.usernames`) — like
+  `--customer-ids`, but every token is looked up as a `Users.userName`, including all-digit
+  userNames that `--customer-ids` would read as a raw numeric id. When both flags are passed, the
+  filter is the union of the two. `--beneficiary-customer-usernames=...` /
+  `--transaction-customer-usernames=...` are the per-migration counterparts. A migration's scoped
+  pair (e.g. `--beneficiary-customer-ids` + `--beneficiary-customer-usernames`) replaces the general
+  `--customer-ids` + `--customer-usernames` pair as soon as either scoped flag is set.
 - `--skip-beneficiaries` / `--skip-customers` / `--skip-transactions` — run just a subset of the
   three migrations.
 - `--split-by-country` — write `beneficiary_details` and `transaction` as one file per country

@@ -13,7 +13,8 @@ import java.util.Properties;
  * Expected properties - see migration.properties.example for the full, documented list:
  *   db.url, db.username, db.password, db.driver
  *   output, output.customerInfo, output.transactions, payment.id.offset, row.limit
- *   status.filter, transaction.months, customer.ids, beneficiary.customer.ids, transaction.customer.ids
+ *   status.filter, transaction.months, customer.ids, beneficiary.customer.ids, transaction.customer.ids,
+ *     customer.usernames, beneficiary.customer.usernames, transaction.customer.usernames
  *   users.table, transferBeneficiaries.table, paymentBeneficiaries.table, bankBranches.table,
  *     devices.table, transactions.table
  *   banks.table, banks.column.id, banks.column.name, banks.column.swiftCode,
@@ -110,12 +111,34 @@ public final class MigrationConfig {
 		return get("customer.ids", null);
 	}
 
+	public String customerUserNames() {
+		return get("customer.usernames", null);
+	}
+
 	public String beneficiaryCustomerIds() {
-		return get("beneficiary.customer.ids", customerIds());
+		return scopedCustomerFilter("beneficiary", "ids");
+	}
+
+	public String beneficiaryCustomerUserNames() {
+		return scopedCustomerFilter("beneficiary", "usernames");
 	}
 
 	public String transactionCustomerIds() {
-		return get("transaction.customer.ids", customerIds());
+		return scopedCustomerFilter("transaction", "ids");
+	}
+
+	public String transactionCustomerUserNames() {
+		return scopedCustomerFilter("transaction", "usernames");
+	}
+
+	/**
+	 * A migration-scoped customer filter (e.g. beneficiary.customer.ids/.usernames) replaces the
+	 * general customer.ids/customer.usernames pair as a whole once either of its two keys is set,
+	 * so beneficiary.customer.usernames=X alone doesn't also pick up customer.ids' customers.
+	 */
+	private String scopedCustomerFilter(String scope, String kind) {
+		boolean scopeSet = props.containsKey(scope + ".customer.ids") || props.containsKey(scope + ".customer.usernames");
+		return scopeSet ? get(scope + ".customer." + kind, null) : get("customer." + kind, null);
 	}
 
 	public String usersTable() {

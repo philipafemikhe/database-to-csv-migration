@@ -32,7 +32,7 @@ public final class TransferBeneficiarySource {
 		String columns = "id, accountName, accountNumber, bank_id, customer_id, accountCurrency, transactionType, bankBranch_id";
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
-		List<Long> customerIds = CustomerIdFilter.resolve(config.beneficiaryCustomerIds(), users);
+		List<Long> customerIds = CustomerIdFilter.resolve(config.beneficiaryCustomerIds(), config.beneficiaryCustomerUserNames(), users);
 		String sql = "SELECT " + top + columns + " FROM " + config.transferBeneficiariesTable()
 				+ (customerIds.isEmpty() ? "" : " WHERE customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
 

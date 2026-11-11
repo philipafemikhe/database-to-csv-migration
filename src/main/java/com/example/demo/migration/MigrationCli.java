@@ -55,6 +55,9 @@ public final class MigrationCli {
 			options.customerIds().ifPresent(v -> config.override("customer.ids", v));
 			options.beneficiaryCustomerIds().ifPresent(v -> config.override("beneficiary.customer.ids", v));
 			options.transactionCustomerIds().ifPresent(v -> config.override("transaction.customer.ids", v));
+			options.customerUserNames().ifPresent(v -> config.override("customer.usernames", v));
+			options.beneficiaryCustomerUserNames().ifPresent(v -> config.override("beneficiary.customer.usernames", v));
+			options.transactionCustomerUserNames().ifPresent(v -> config.override("transaction.customer.usernames", v));
 
 			try (Connection connection = ConnectionFactory.open(config)) {
 				if (options.describeSchema()) {
@@ -100,6 +103,14 @@ public final class MigrationCli {
 				+ "  --transaction-customer-ids   Overrides 'transaction.customer.ids': same format as --customer-ids,\n"
 				+ "                         but applies only to Transactions, overriding --customer-ids for just that\n"
 				+ "                         migration. Falls back to --customer-ids when omitted.\n"
+				+ "  --customer-usernames    Overrides 'customer.usernames': a comma-separated list of Users.userName\n"
+				+ "                         values (e.g. --customer-usernames=R0540050,0999123456). Unlike --customer-ids,\n"
+				+ "                         every token is looked up as a userName, even all-digit ones. Combined with\n"
+				+ "                         --customer-ids (union) when both are passed.\n"
+				+ "  --beneficiary-customer-usernames / --transaction-customer-usernames\n"
+				+ "                         userName counterparts of --beneficiary-customer-ids/--transaction-customer-ids.\n"
+				+ "                         Setting either the -ids or -usernames flag for a migration replaces the\n"
+				+ "                         --customer-ids/--customer-usernames pair for that migration.\n"
 				+ "  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.\n"
 				+ "  --skip-customers        Don't migrate Users this run.\n"
 				+ "  --skip-transactions     Don't migrate Transactions this run.\n"

@@ -20,12 +20,16 @@ public final class CliOptions {
 	private final String customerIds;
 	private final String beneficiaryCustomerIds;
 	private final String transactionCustomerIds;
+	private final String customerUserNames;
+	private final String beneficiaryCustomerUserNames;
+	private final String transactionCustomerUserNames;
 	private final String transactionMonths;
 
 	CliOptions(boolean help, String configPath, String output, String outputCustomers, String outputTransactions,
 			String limit, boolean describeSchema, boolean skipBeneficiaries, boolean skipCustomers, boolean skipTransactions,
 			boolean splitByCountry, String statusFilter, String customerIds, String beneficiaryCustomerIds,
-			String transactionCustomerIds, String transactionMonths) {
+			String transactionCustomerIds, String customerUserNames, String beneficiaryCustomerUserNames,
+			String transactionCustomerUserNames, String transactionMonths) {
 		this.help = help;
 		this.configPath = configPath;
 		this.output = output;
@@ -41,6 +45,9 @@ public final class CliOptions {
 		this.customerIds = customerIds;
 		this.beneficiaryCustomerIds = beneficiaryCustomerIds;
 		this.transactionCustomerIds = transactionCustomerIds;
+		this.customerUserNames = customerUserNames;
+		this.beneficiaryCustomerUserNames = beneficiaryCustomerUserNames;
+		this.transactionCustomerUserNames = transactionCustomerUserNames;
 		this.transactionMonths = transactionMonths;
 	}
 
@@ -102,6 +109,18 @@ public final class CliOptions {
 
 	public Optional<String> transactionCustomerIds() {
 		return Optional.ofNullable(transactionCustomerIds);
+	}
+
+	public Optional<String> customerUserNames() {
+		return Optional.ofNullable(customerUserNames);
+	}
+
+	public Optional<String> beneficiaryCustomerUserNames() {
+		return Optional.ofNullable(beneficiaryCustomerUserNames);
+	}
+
+	public Optional<String> transactionCustomerUserNames() {
+		return Optional.ofNullable(transactionCustomerUserNames);
 	}
 
 	public Optional<String> transactionMonths() {

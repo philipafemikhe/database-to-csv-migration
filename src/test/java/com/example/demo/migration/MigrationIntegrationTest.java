@@ -357,6 +357,8 @@ class MigrationIntegrationTest {
 		assertEquals("ZM-ZAMTEL", r4.get("wallet_code"));
 		assertEquals("ZM-ZAMTEL", r4.get("bank_gateway_code"));
 		assertEquals("Zamtel Wallet", r4.get("bank_name"));
+		// IWL keeps TransferBeneficiaries.accountNumber in account_number like every other type.
+		assertEquals("111", r4.get("account_number"));
 
 		// Zambia INSTANT + wallet bank but allowInstantTransfer=0 -> OBR: for Zambia,
 		// allowInstantTransfer=0 always means OBR regardless of institution (WALLET or BANK) - see
@@ -408,6 +410,7 @@ class MigrationIntegrationTest {
 		assertEquals("IWL", r13.get("beneficiary_type"));
 		assertEquals("Zamtel Wallet", r13.get("wallet_type"));
 		assertEquals("ZM-ZAMTEL", r13.get("wallet_code"));
+		assertEquals("999", r13.get("account_number"));
 
 		// Zambia RTGS against a bank with allowInstantTransfer=0 -> OBR (unchanged from before).
 		CSVRecord r14 = byId.get("14");
@@ -1157,6 +1160,46 @@ class MigrationIntegrationTest {
 			transactionCountFallback = TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
 		}
 		assertEquals(29, transactionCountFallback, "falls back to customer.ids=100, same as filtersEveryOutputByCustomerIdsWhenRequested");
+	}
+
+	@Test
+	void filtersByCustomerUserNames() throws Exception {
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		BanksRepository banks = BanksRepository.load(connection, config);
+		BankBranchesRepository branches = BankBranchesRepository.load(connection, config.bankBranchesTable());
+		String runTimestamp = "2026-07-20 10:00:00.000";
+
+		// customer.usernames alone: "R000100" is Users.userName for id=100 -> rows 8, 9, 10, 15.
+		config.override("customer.usernames", "R000100");
+		int transferCountByUserName;
+		try (CsvWriter writer = new CsvWriter(tempDir.resolve("beneficiary_usernames.csv"), BeneficiaryDetailsSchema.HEADER)) {
+			transferCountByUserName = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+		}
+		assertEquals(4, transferCountByUserName);
+
+		// customer.ids and customer.usernames combine as a union: 200's rows (1, 2, 3) + 100's = 7.
+		config.override("customer.ids", "200");
+		int transferCountUnion;
+		try (CsvWriter writer = new CsvWriter(tempDir.resolve("beneficiary_ids_and_usernames.csv"), BeneficiaryDetailsSchema.HEADER)) {
+			transferCountUnion = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+		}
+		assertEquals(7, transferCountUnion);
+
+		// beneficiary.customer.usernames replaces the general ids+usernames pair for beneficiaries.
+		config.override("beneficiary.customer.usernames", "R000100");
+		int transferCountScoped;
+		try (CsvWriter writer = new CsvWriter(tempDir.resolve("beneficiary_scoped_usernames.csv"), BeneficiaryDetailsSchema.HEADER)) {
+			transferCountScoped = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+		}
+		assertEquals(4, transferCountScoped, "only customer_id=100's rows, not customer.ids=200's");
+
+		// Usernames are never parsed as numeric ids, so "100" (an id, not a userName) is rejected.
+		config.override("beneficiary.customer.usernames", "100");
+		try (CsvWriter writer = new CsvWriter(tempDir.resolve("beneficiary_bad_username.csv"), BeneficiaryDetailsSchema.HEADER)) {
+			IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+					() -> TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries")));
+			assertTrue(ex.getMessage().contains("customer-usernames"), "error should name the flag: " + ex.getMessage());
+		}
 	}
 
 	/**

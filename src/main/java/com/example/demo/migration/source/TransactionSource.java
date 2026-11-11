@@ -44,7 +44,7 @@ public final class TransactionSource {
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
 		String statusFilter = normalizeStatusFilter(config.statusFilter());
-		List<Long> customerIds = CustomerIdFilter.resolve(config.transactionCustomerIds(), users);
+		List<Long> customerIds = CustomerIdFilter.resolve(config.transactionCustomerIds(), config.transactionCustomerUserNames(), users);
 
 		List<String> conditions = new ArrayList<>();
 		if (statusFilter != null) {
