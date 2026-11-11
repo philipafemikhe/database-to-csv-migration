@@ -19,6 +19,8 @@ import java.sql.Connection;
  *   - dbo.TransferBeneficiaries + dbo.PaymentBeneficiaries -> beneficiary_details.csv
  *   - dbo.Users -> customer_info.csv
  *   - dbo.Transactions -> transaction.csv
+ *   - dbo.Users / dbo.Devices / dbo.Old_Ussd_Account -> users.csv / devices.csv / old_ussd_account.csv
+ *     (column-for-column copies; users and devices one file per country)
  *
  * Usage:
  *   java -jar beneficiary-migration.jar --config=migration.properties [options]
@@ -49,6 +51,9 @@ public final class MigrationCli {
 			options.output().ifPresent(v -> config.override("output", v));
 			options.outputCustomers().ifPresent(v -> config.override("output.customerInfo", v));
 			options.outputTransactions().ifPresent(v -> config.override("output.transactions", v));
+			options.outputUsers().ifPresent(v -> config.override("output.users", v));
+			options.outputDevices().ifPresent(v -> config.override("output.devices", v));
+			options.outputOldUssdAccounts().ifPresent(v -> config.override("output.oldUssdAccounts", v));
 			options.limit().ifPresent(v -> config.override("row.limit", v));
 			options.statusFilter().ifPresent(v -> config.override("status.filter", v));
 			options.transactionMonths().ifPresent(v -> config.override("transaction.months", v));
@@ -63,7 +68,8 @@ public final class MigrationCli {
 				if (options.describeSchema()) {
 					SchemaInspector.describe(connection, config);
 				} else {
-					new MigrationRunner(connection, config).run(!options.skipBeneficiaries(), !options.skipCustomers(), !options.skipTransactions(), options.splitByCountry());
+					new MigrationRunner(connection, config).run(!options.skipBeneficiaries(), !options.skipCustomers(), !options.skipTransactions(),
+							!options.skipUsers(), !options.skipDevices(), !options.skipOldUssdAccounts(), options.splitByCountry());
 				}
 			}
 			log.info("Done in {} ms", System.currentTimeMillis() - start);
@@ -84,6 +90,9 @@ public final class MigrationCli {
 				+ "  --output               Overrides 'output': where to write beneficiary_details.csv.\n"
 				+ "  --output-customers      Overrides 'output.customerInfo': where to write customer_info.csv.\n"
 				+ "  --output-transactions   Overrides 'output.transactions': where to write transaction.csv.\n"
+				+ "  --output-users          Overrides 'output.users': base path for users.csv (one file per country).\n"
+				+ "  --output-devices        Overrides 'output.devices': base path for devices.csv (one file per country).\n"
+				+ "  --output-old-ussd-accounts  Overrides 'output.oldUssdAccounts': where to write old_ussd_account.csv.\n"
 				+ "  --limit                Overrides 'row.limit': cap the number of rows read per source table (testing).\n"
 				+ "  --status-filter         Overrides 'status.filter': only migrate Transactions rows with this status\n"
 				+ "                         (SUCCESS/SUCCESSFUL, FAILED or PENDING, case-insensitive). Omit to migrate all statuses.\n"
@@ -112,8 +121,11 @@ public final class MigrationCli {
 				+ "                         Setting either the -ids or -usernames flag for a migration replaces the\n"
 				+ "                         --customer-ids/--customer-usernames pair for that migration.\n"
 				+ "  --skip-beneficiaries    Don't migrate TransferBeneficiaries/PaymentBeneficiaries this run.\n"
-				+ "  --skip-customers        Don't migrate Users this run.\n"
+				+ "  --skip-customers        Don't write customer_info.csv (from Users) this run.\n"
 				+ "  --skip-transactions     Don't migrate Transactions this run.\n"
+				+ "  --skip-users            Don't write users.csv (column-for-column copy of Users) this run.\n"
+				+ "  --skip-devices          Don't write devices.csv (from Devices) this run.\n"
+				+ "  --skip-old-ussd-accounts  Don't write old_ussd_account.csv (from Old_Ussd_Account) this run.\n"
 				+ "  --split-by-country      Write beneficiary_details and transaction as one file per country (e.g.\n"
 				+ "                         beneficiary_details_migrated_MW.csv) instead of a single merged file. Rows\n"
 				+ "                         with no resolvable country go to a _UNKNOWN file. customer_info is never\n"

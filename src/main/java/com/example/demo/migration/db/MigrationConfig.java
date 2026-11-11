@@ -12,11 +12,12 @@ import java.util.Properties;
  *
  * Expected properties - see migration.properties.example for the full, documented list:
  *   db.url, db.username, db.password, db.driver
- *   output, output.customerInfo, output.transactions, payment.id.offset, row.limit
+ *   output, output.customerInfo, output.transactions, output.users, output.devices, output.oldUssdAccounts,
+ *     payment.id.offset, row.limit
  *   status.filter, transaction.months, customer.ids, beneficiary.customer.ids, transaction.customer.ids,
  *     customer.usernames, beneficiary.customer.usernames, transaction.customer.usernames
  *   users.table, transferBeneficiaries.table, paymentBeneficiaries.table, bankBranches.table,
- *     devices.table, transactions.table
+ *     devices.table, transactions.table, oldUssdAccount.table
  *   banks.table, banks.column.id, banks.column.name, banks.column.swiftCode,
  *     banks.column.institution, banks.column.allowInstantTransfer, banks.column.code, banks.wallet.marker
  *   countryPartner.table, countryPartner.column.id, countryPartner.column.name
@@ -83,6 +84,18 @@ public final class MigrationConfig {
 
 	public String transactionsOutputPath() {
 		return get("output.transactions", "transaction_migrated.csv");
+	}
+
+	public String usersOutputPath() {
+		return get("output.users", "users_migrated.csv");
+	}
+
+	public String devicesOutputPath() {
+		return get("output.devices", "devices_migrated.csv");
+	}
+
+	public String oldUssdAccountsOutputPath() {
+		return get("output.oldUssdAccounts", "old_ussd_account_migrated.csv");
 	}
 
 	public long paymentBeneficiaryIdOffset() {
@@ -159,6 +172,10 @@ public final class MigrationConfig {
 
 	public String transactionsTable() {
 		return get("transactions.table", "dbo.Transactions");
+	}
+
+	public String oldUssdAccountTable() {
+		return get("oldUssdAccount.table", "dbo.Old_Ussd_Account");
 	}
 
 	public String bankBranchesTable() {

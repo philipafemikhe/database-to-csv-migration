@@ -6,12 +6,15 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Routes each row to a sibling file named after its country code (e.g. base
  * "beneficiary_details_migrated.csv" + code "MW" -> "beneficiary_details_migrated_MW.csv"),
  * opening one {@link CsvWriter} per code lazily on first write. Rows whose country code is
  * blank/unresolved go to a "UNKNOWN" file so row counts still reconcile against the total.
+ * The country code is either read from a column of the row itself, or derived from the row by a
+ * function (for outputs that don't carry a country code column, e.g. users/devices).
  */
 public final class PerCountryCsvWriter implements RecordWriter {
 
@@ -19,18 +22,22 @@ public final class PerCountryCsvWriter implements RecordWriter {
 
 	private final Path basePath;
 	private final String[] header;
-	private final String countryColumn;
+	private final Function<OutputRecord, String> countryOf;
 	private final Map<String, CsvWriter> writers = new LinkedHashMap<>();
 
 	public PerCountryCsvWriter(Path basePath, String[] header, String countryColumn) {
+		this(basePath, header, record -> record.get(countryColumn));
+	}
+
+	public PerCountryCsvWriter(Path basePath, String[] header, Function<OutputRecord, String> countryOf) {
 		this.basePath = basePath;
 		this.header = header;
-		this.countryColumn = countryColumn;
+		this.countryOf = countryOf;
 	}
 
 	@Override
 	public void write(OutputRecord record) throws IOException {
-		String value = record.get(countryColumn);
+		String value = countryOf.apply(record);
 		String code = value == null || value.trim().isEmpty() ? UNKNOWN_CODE : value;
 		CsvWriter writer = writers.get(code);
 		if (writer == null) {

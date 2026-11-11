@@ -5,6 +5,8 @@ Migrates records from the old SQL Server schema into the new-model CSVs:
 - `dbo.TransferBeneficiaries` + `dbo.PaymentBeneficiaries` → `beneficiary_details.csv`
 - `dbo.Users` → `customer_info.csv`
 - `dbo.Transactions` → `transaction.csv`
+- `dbo.Users` / `dbo.Devices` / `dbo.Old_Ussd_Account` → `users.csv` / `devices.csv` /
+  `old_ussd_account.csv` (column-for-column copies; users and devices one file per country)
 
 Ships as one self-contained jar — connects to the source database directly, no intermediate
 exports needed.
@@ -41,16 +43,20 @@ the defaults don't match.
 java -jar target/beneficiary-migration.jar --config=migration.properties
 ```
 
-Runs all three migrations in one pass (reusing the same DB connection and already-loaded
+Runs every migration in one pass (reusing the same DB connection and already-loaded
 reference data) and writes:
 - `output` (default `beneficiary_details_migrated.csv`)
 - `output.customerInfo` (default `customer_info_migrated.csv`)
 - `output.transactions` (default `transaction_migrated.csv`)
+- `output.users` (default `users_migrated.csv`, always split per country: `users_migrated_MW.csv`, ...)
+- `output.devices` (default `devices_migrated.csv`, always split per country: `devices_migrated_MW.csv`, ...)
+- `output.oldUssdAccounts` (default `old_ussd_account_migrated.csv`)
 
 each with its own sibling `*.warnings.log` listing rows that couldn't be fully resolved.
 
 Useful flags:
-- `--output=path.csv` / `--output-customers=path.csv` / `--output-transactions=path.csv` —
+- `--output=path.csv` / `--output-customers=path.csv` / `--output-transactions=path.csv` /
+  `--output-users=path.csv` / `--output-devices=path.csv` / `--output-old-ussd-accounts=path.csv` —
   override any output path for this run.
 - `--limit=N` — cap rows read per source table (dry run against a test DB).
 - `--status-filter=SUCCESSFUL` (or `SUCCESS`) / `--status-filter=FAILED` / `--status-filter=PENDING` — only migrate
@@ -78,8 +84,8 @@ Useful flags:
   `--transaction-customer-usernames=...` are the per-migration counterparts. A migration's scoped
   pair (e.g. `--beneficiary-customer-ids` + `--beneficiary-customer-usernames`) replaces the general
   `--customer-ids` + `--customer-usernames` pair as soon as either scoped flag is set.
-- `--skip-beneficiaries` / `--skip-customers` / `--skip-transactions` — run just a subset of the
-  three migrations.
+- `--skip-beneficiaries` / `--skip-customers` / `--skip-transactions` / `--skip-users` /
+  `--skip-devices` / `--skip-old-ussd-accounts` — run just a subset of the migrations.
 - `--split-by-country` — write `beneficiary_details` and `transaction` as one file per country
   (e.g. `beneficiary_details_migrated_MW.csv`, `_BW.csv`, `_ZW.csv`, `_ZM.csv`) instead of a
   single merged file, keyed off the same fixed IswCountry code each row already carries
@@ -127,6 +133,31 @@ csv/      the output CSV writer
 ```
 
 ## Mapping notes
+
+### users / devices / old_ussd_account
+
+Field mapping comes from `MobileBanking_Users_Devices_OldUSSDAccount_Mapping.xlsx` in
+`src/main/resources/` (one sheet per table) - every column is renamed to snake_case and copied
+as-is, except:
+
+- "boolean value 0 = FALSE, 1 = TRUE, Blank = FALSE" columns (`has_ussd`, `old_ussd_account`,
+  `has_mobile`, `ussd_disabled`, `login_retries`, `is_deleted`, `disable_user`, `display_banner`,
+  `force_password_reset`, and devices' `active`) are written `TRUE`/`FALSE`. `loginRetries` is a
+  `bigint` count in the source: values other than 0/1 are written `TRUE` and warned.
+- `corporate_user_hierarchy` defaults to `0` when NULL.
+- Numbers are never written in exponential notation (mobile/phone numbers, account numbers,
+  `imsinumber`, `uuid`, ...), including text values an Excel round-trip stored as e.g.
+  `2.60973641672E+11`.
+- "same value" columns keep the source value: `bit` columns stay `1`/`0`, timestamps use the same
+  `yyyy-MM-dd HH:mm:ss.SSS` format as the other outputs, `date` columns are `yyyy-MM-dd`.
+- The source tables are read with `SELECT *`, so a column the sheet lists but the table doesn't have
+  (e.g. `disable_user`/`display_banner`/`force_password_reset`/`migratedDate`/`imsi`, which aren't
+  in `Migration_TableScripts.txt`) is logged once and written blank (`FALSE` for booleans).
+- `users` and `devices` are always one file per country (regardless of `--split-by-country`), by the
+  fixed `IswCountry` code of `Users.country_id` - for devices, the owning user's (`customer_id`).
+  Unresolvable countries go to `_UNKNOWN`. `old_ussd_account` has no country link and is one file.
+- `--customer-ids`/`--customer-usernames` restrict `users` (by `id`) and `devices` (by `customer_id`);
+  `old_ussd_account` isn't filtered.
 
 ### beneficiary_details (TransferBeneficiaries + PaymentBeneficiaries)
 

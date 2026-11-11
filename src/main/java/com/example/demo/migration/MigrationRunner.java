@@ -3,11 +3,18 @@ package com.example.demo.migration;
 import com.example.demo.migration.csv.CsvWriter;
 import com.example.demo.migration.csv.PerCountryCsvWriter;
 import com.example.demo.migration.csv.RecordWriter;
+import com.example.demo.migration.db.CustomerIdFilter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.BeneficiaryDetailsSchema;
+import com.example.demo.migration.mapping.ColumnRule;
 import com.example.demo.migration.mapping.CustomerInfoSchema;
+import com.example.demo.migration.mapping.DevicesSchema;
+import com.example.demo.migration.mapping.IswCountry;
+import com.example.demo.migration.mapping.OldUssdAccountSchema;
 import com.example.demo.migration.mapping.TimestampFormat;
 import com.example.demo.migration.mapping.TransactionSchema;
+import com.example.demo.migration.mapping.UsersSchema;
+import com.example.demo.migration.model.UserRecord;
 import com.example.demo.migration.repo.BankBranchesRepository;
 import com.example.demo.migration.repo.BanksRepository;
 import com.example.demo.migration.repo.BillersRepository;
@@ -16,6 +23,7 @@ import com.example.demo.migration.repo.DevicesRepository;
 import com.example.demo.migration.repo.ProductsRepository;
 import com.example.demo.migration.repo.UsersRepository;
 import com.example.demo.migration.source.CustomerInfoSource;
+import com.example.demo.migration.source.DirectCopySource;
 import com.example.demo.migration.source.PaymentBeneficiarySource;
 import com.example.demo.migration.source.TransactionSource;
 import com.example.demo.migration.source.TransferBeneficiarySource;
@@ -26,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -41,6 +50,11 @@ import java.util.Map;
  * PerCountryCsvWriter. customer_info stays a single merged file regardless: it's grouped by the
  * dynamic CountryPartner lookup, not the fixed IswCountry table, so it doesn't share a consistent
  * country code with the other two outputs.
+ *
+ * users and devices (column-for-column copies of dbo.Users / dbo.Devices) are always written one
+ * file per country, keyed off the same fixed IswCountry code - the user's own country_id for
+ * users, the owning user's country_id for devices. old_ussd_account has no country link, so it's
+ * always a single file.
  */
 public final class MigrationRunner {
 
@@ -55,6 +69,11 @@ public final class MigrationRunner {
 	}
 
 	public void run(boolean doBeneficiaries, boolean doCustomers, boolean doTransactions, boolean splitByCountry) throws Exception {
+		run(doBeneficiaries, doCustomers, doTransactions, false, false, false, splitByCountry);
+	}
+
+	public void run(boolean doBeneficiaries, boolean doCustomers, boolean doTransactions, boolean doUsers, boolean doDevices,
+			boolean doOldUssdAccounts, boolean splitByCountry) throws Exception {
 		log.info("Loading reference data...");
 		UsersRepository users = UsersRepository.load(connection, config.usersTable());
 		BankBranchesRepository branches = BankBranchesRepository.load(connection, config.bankBranchesTable());
@@ -84,6 +103,59 @@ public final class MigrationRunner {
 		}
 		if (doTransactions) {
 			runTransactionMigration(users, banks, billers, products, splitByCountry);
+		}
+		List<Long> customerIds = doUsers || doDevices
+				? CustomerIdFilter.resolve(config.customerIds(), config.customerUserNames(), users)
+				: Collections.<Long>emptyList();
+		if (doUsers) {
+			RecordWriter writer = new PerCountryCsvWriter(Paths.get(config.usersOutputPath()), UsersSchema.HEADER,
+					record -> countryCode(parseId(record.get("country_id"))));
+			runDirectCopy("Users", "users", config.usersTable(), UsersSchema.RULES, UsersSchema.HEADER,
+					"id", customerIds, writer, Paths.get(config.usersOutputPath()));
+		}
+		if (doDevices) {
+			RecordWriter writer = new PerCountryCsvWriter(Paths.get(config.devicesOutputPath()), DevicesSchema.HEADER, record -> {
+				UserRecord owner = users.findById(parseId(record.get("customer_id")));
+				return owner == null ? null : countryCode(owner.countryId());
+			});
+			runDirectCopy("Devices", "devices", config.devicesTable(), DevicesSchema.RULES, DevicesSchema.HEADER,
+					"customer_id", customerIds, writer, Paths.get(config.devicesOutputPath()));
+		}
+		if (doOldUssdAccounts) {
+			Path outputPath = Paths.get(config.oldUssdAccountsOutputPath());
+			runDirectCopy("Old_Ussd_Account", "old_ussd_account", config.oldUssdAccountTable(), OldUssdAccountSchema.RULES,
+					OldUssdAccountSchema.HEADER, null, Collections.<Long>emptyList(),
+					new CsvWriter(outputPath, OldUssdAccountSchema.HEADER), outputPath);
+		}
+	}
+
+	private void runDirectCopy(String label, String outputName, String table, ColumnRule[] rules,
+			String[] header, String filterColumn, List<Long> filterIds, RecordWriter writer, Path outputPath) throws Exception {
+		WarningCollector warnings = new WarningCollector(label);
+		int count;
+		try (RecordWriter w = writer) {
+			log.info("Migrating {} -> {}", table, outputPath.toAbsolutePath());
+			count = DirectCopySource.migrate(connection, label, table, rules, header, filterColumn, filterIds, config.rowLimit(), w, warnings);
+		}
+		Path warningsPath = warnings.isEmpty() ? null : ValidationWarning.writeLog(outputPath, warnings.all());
+		log.info("{}: wrote {} rows to {}; {} warning(s){}",
+				outputName, count, describeDestination(writer, outputPath), warnings.size(),
+				warningsPath == null ? "" : " -> " + warningsPath.toAbsolutePath());
+	}
+
+	private static String countryCode(Long countryId) {
+		IswCountry country = IswCountry.fromId(countryId);
+		return country == null ? null : country.code();
+	}
+
+	private static Long parseId(String value) {
+		if (value == null || value.isEmpty()) {
+			return null;
+		}
+		try {
+			return Long.parseLong(value);
+		} catch (NumberFormatException e) {
+			return null;
 		}
 	}
 

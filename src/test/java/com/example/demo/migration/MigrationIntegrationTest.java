@@ -4,7 +4,10 @@ import com.example.demo.migration.csv.CsvWriter;
 import com.example.demo.migration.db.MigrationConfig;
 import com.example.demo.migration.mapping.BeneficiaryDetailsSchema;
 import com.example.demo.migration.mapping.CustomerInfoSchema;
+import com.example.demo.migration.mapping.DevicesSchema;
+import com.example.demo.migration.mapping.OldUssdAccountSchema;
 import com.example.demo.migration.mapping.TransactionSchema;
+import com.example.demo.migration.mapping.UsersSchema;
 import com.example.demo.migration.repo.BankBranchesRepository;
 import com.example.demo.migration.repo.BanksRepository;
 import com.example.demo.migration.repo.BillersRepository;
@@ -1199,6 +1202,137 @@ class MigrationIntegrationTest {
 			IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
 					() -> TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries")));
 			assertTrue(ex.getMessage().contains("customer-usernames"), "error should name the flag: " + ex.getMessage());
+		}
+	}
+
+	@Test
+	void copiesUsersAndDevicesPerCountryAndOldUssdAccountsToOneFile() throws Exception {
+		try (Statement st = connection.createStatement()) {
+			st.execute("ALTER TABLE dbo.Users ADD COLUMN loginRetries BIGINT");
+			st.execute("ALTER TABLE dbo.Users ADD COLUMN corporateUserHierarchy INT");
+			st.execute("UPDATE dbo.Users SET loginRetries = 1, corporateUserHierarchy = 2 WHERE id = 100");
+			st.execute("UPDATE dbo.Users SET loginRetries = 3 WHERE id = 300");
+			// An Excel-mangled number stored as text: must come out in plain notation.
+			st.execute("UPDATE dbo.Users SET mobileNumber = '2.60973641672E+11' WHERE id = 200");
+			st.execute("ALTER TABLE dbo.Devices ADD COLUMN latitude DOUBLE");
+			st.execute("UPDATE dbo.Devices SET latitude = -24.6282 WHERE id = 1");
+			st.execute("CREATE TABLE dbo.Old_Ussd_Account (id BIGINT, emailAddress VARCHAR(255), fullName VARCHAR(255),\n"
+					+ "  password VARCHAR(255), phoneNumber VARCHAR(255), primaryAccountNumber VARCHAR(255), userName VARCHAR(255))");
+			st.execute("INSERT INTO dbo.Old_Ussd_Account VALUES\n"
+					+ "  (1, 'a@example.com', 'Alice Banda', 'hash1', '2.65994885882E+11', '1125501060384', 'R000300'),\n"
+					+ "  (2, NULL, 'Bob Phiri', 'hash2', '260971111111', NULL, 'R000250')\n");
+		}
+		Path usersBase = tempDir.resolve("users.csv");
+		Path devicesBase = tempDir.resolve("devices.csv");
+		Path oldUssdPath = tempDir.resolve("old_ussd_account.csv");
+		config.override("output.users", usersBase.toString());
+		config.override("output.devices", devicesBase.toString());
+		config.override("output.oldUssdAccounts", oldUssdPath.toString());
+
+		// Split-by-country off: users/devices are split regardless.
+		new MigrationRunner(connection, config).run(false, false, false, true, true, true, false);
+
+		assertFalse(Files.exists(usersBase));
+		Map<String, CSVRecord> usersMw = readCsvById(tempDir.resolve("users_MW.csv"), UsersSchema.HEADER, "id");
+		Map<String, CSVRecord> usersBw = readCsvById(tempDir.resolve("users_BW.csv"), UsersSchema.HEADER, "id");
+		Map<String, CSVRecord> usersZw = readCsvById(tempDir.resolve("users_ZW.csv"), UsersSchema.HEADER, "id");
+		Map<String, CSVRecord> usersZm = readCsvById(tempDir.resolve("users_ZM.csv"), UsersSchema.HEADER, "id");
+		Map<String, CSVRecord> usersUnknown = readCsvById(tempDir.resolve("users_UNKNOWN.csv"), UsersSchema.HEADER, "id");
+		assertEquals(java.util.Collections.singleton("100"), usersMw.keySet());
+		assertEquals(java.util.Collections.singleton("200"), usersBw.keySet());
+		assertEquals(java.util.Collections.singleton("300"), usersZw.keySet());
+		assertEquals(java.util.Collections.singleton("250"), usersZm.keySet());
+		assertEquals(java.util.Collections.singleton("400"), usersUnknown.keySet(), "country_id 888 isn't one of the four countries");
+
+		CSVRecord u100 = usersMw.get("100");
+		assertEquals("R000100", u100.get("user_name"));
+		assertEquals("1", u100.get("country_id"));
+		assertEquals("2026-06-16 13:05:21.865", u100.get("date_registered"));
+		assertEquals("TRUE", u100.get("has_ussd"));
+		assertEquals("TRUE", u100.get("has_mobile"));
+		assertEquals("FALSE", u100.get("ussd_disabled"));
+		assertEquals("FALSE", u100.get("is_deleted"));
+		assertEquals("TRUE", u100.get("login_retries"));
+		assertEquals("2", u100.get("corporate_user_hierarchy"));
+		// "same value" bits keep the source 1/0.
+		assertEquals("0", u100.get("login_disabled"));
+		// Columns the fixture table doesn't have: blank, FALSE for booleans.
+		assertEquals("", u100.get("full_name"));
+		assertEquals("FALSE", u100.get("old_ussd_account"));
+		assertEquals("FALSE", u100.get("force_password_reset"));
+
+		CSVRecord u200 = usersBw.get("200");
+		assertEquals("260973641672", u200.get("mobile_number"));
+		assertEquals("650109169194084", u200.get("imsinumber"));
+		assertEquals("FALSE", u200.get("login_retries"), "NULL -> FALSE");
+		assertEquals("0", u200.get("corporate_user_hierarchy"), "NULL -> default 0");
+		// loginRetries=3 isn't 0/1: TRUE, with a warning.
+		assertEquals("TRUE", usersZw.get("300").get("login_retries"));
+		assertTrue(Files.readAllLines(tempDir.resolve(findWarningsLog("users"))).stream()
+				.anyMatch(line -> line.contains("loginRetries value 3")));
+
+		// Devices follow their owning user's country: device 1 -> user 100 (MW), 2 and 3 -> user 300 (ZW).
+		Map<String, CSVRecord> devicesMw = readCsvById(tempDir.resolve("devices_MW.csv"), DevicesSchema.HEADER, "id");
+		Map<String, CSVRecord> devicesZw = readCsvById(tempDir.resolve("devices_ZW.csv"), DevicesSchema.HEADER, "id");
+		assertEquals(java.util.Collections.singleton("1"), devicesMw.keySet());
+		assertEquals(new java.util.HashSet<>(java.util.Arrays.asList("2", "3")), devicesZw.keySet());
+		CSVRecord d1 = devicesMw.get("1");
+		assertEquals("TRUE", d1.get("active"));
+		assertEquals("DEVICE-UUID-100", d1.get("uuid"));
+		assertEquals("100", d1.get("customer_id"));
+		assertEquals("-24.6282", d1.get("latitude"));
+		assertEquals("2026-06-16 13:06:00.000", d1.get("registration_completed"));
+		assertEquals("FALSE", devicesZw.get("2").get("active"));
+
+		Map<String, CSVRecord> oldUssd = readCsvById(oldUssdPath, OldUssdAccountSchema.HEADER, "id");
+		assertEquals(2, oldUssd.size());
+		assertEquals("265994885882", oldUssd.get("1").get("phone_number"));
+		assertEquals("1125501060384", oldUssd.get("1").get("primary_account_number"));
+		assertEquals("hash1", oldUssd.get("1").get("password"));
+		assertEquals("R000250", oldUssd.get("2").get("user_name"));
+		assertEquals("", oldUssd.get("2").get("email_address"));
+
+		// customer.ids restricts users and devices (not old_ussd_account, which has no customer link).
+		config.override("customer.ids", "300");
+		config.override("output.users", tempDir.resolve("filtered_users.csv").toString());
+		config.override("output.devices", tempDir.resolve("filtered_devices.csv").toString());
+		new MigrationRunner(connection, config).run(false, false, false, true, true, false, false);
+		assertEquals(java.util.Collections.singleton("300"),
+				readCsvById(tempDir.resolve("filtered_users_ZW.csv"), UsersSchema.HEADER, "id").keySet());
+		assertFalse(Files.exists(tempDir.resolve("filtered_users_MW.csv")));
+		assertEquals(2, readCsvById(tempDir.resolve("filtered_devices_ZW.csv"), DevicesSchema.HEADER, "id").size());
+		assertFalse(Files.exists(tempDir.resolve("filtered_devices_MW.csv")));
+	}
+
+	@Test
+	void skippedUsersDevicesAndOldUssdAccountsWriteNothingAndDontTouchTheirTables() throws Exception {
+		// The fixture DB has no dbo.Old_Ussd_Account: skipping it must not fail the run.
+		config.override("output.users", tempDir.resolve("skip_users.csv").toString());
+		config.override("output.devices", tempDir.resolve("skip_devices.csv").toString());
+		config.override("output.oldUssdAccounts", tempDir.resolve("skip_old_ussd.csv").toString());
+
+		new MigrationRunner(connection, config).run(false, false, false, false, false, false, false);
+		try (java.util.stream.Stream<Path> files = Files.list(tempDir)) {
+			assertFalse(files.anyMatch(p -> p.getFileName().toString().startsWith("skip_")), "nothing should be written when all are skipped");
+		}
+
+		// Skipping only old_ussd_account: users and devices still run, the missing table isn't queried.
+		new MigrationRunner(connection, config).run(false, false, false, true, true, false, false);
+		assertTrue(Files.exists(tempDir.resolve("skip_users_MW.csv")));
+		assertTrue(Files.exists(tempDir.resolve("skip_devices_MW.csv")));
+		assertFalse(Files.exists(tempDir.resolve("skip_old_ussd.csv")));
+
+		// Not skipping it against a DB without the table fails loudly rather than silently writing nothing.
+		assertThrows(java.sql.SQLException.class,
+				() -> new MigrationRunner(connection, config).run(false, false, false, false, false, true, false));
+	}
+
+	private String findWarningsLog(String prefix) throws Exception {
+		try (java.util.stream.Stream<Path> files = Files.list(tempDir)) {
+			return files.map(p -> p.getFileName().toString())
+					.filter(name -> name.startsWith(prefix) && name.endsWith(".log"))
+					.findFirst()
+					.orElseThrow(() -> new AssertionError("no " + prefix + " warnings log in " + tempDir));
 		}
 	}
 

@@ -43,6 +43,12 @@ public final class ArgParser {
 				raw.get("customer-usernames"),
 				raw.get("beneficiary-customer-usernames"),
 				raw.get("transaction-customer-usernames"),
-				raw.get("transaction-months"));
+				raw.get("transaction-months"),
+				raw.get("output-users"),
+				raw.get("output-devices"),
+				raw.get("output-old-ussd-accounts"),
+				raw.containsKey("skip-users"),
+				raw.containsKey("skip-devices"),
+				raw.containsKey("skip-old-ussd-accounts"));
 	}
 }

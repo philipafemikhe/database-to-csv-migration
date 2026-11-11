@@ -24,12 +24,19 @@ public final class CliOptions {
 	private final String beneficiaryCustomerUserNames;
 	private final String transactionCustomerUserNames;
 	private final String transactionMonths;
+	private final String outputUsers;
+	private final String outputDevices;
+	private final String outputOldUssdAccounts;
+	private final boolean skipUsers;
+	private final boolean skipDevices;
+	private final boolean skipOldUssdAccounts;
 
 	CliOptions(boolean help, String configPath, String output, String outputCustomers, String outputTransactions,
 			String limit, boolean describeSchema, boolean skipBeneficiaries, boolean skipCustomers, boolean skipTransactions,
 			boolean splitByCountry, String statusFilter, String customerIds, String beneficiaryCustomerIds,
 			String transactionCustomerIds, String customerUserNames, String beneficiaryCustomerUserNames,
-			String transactionCustomerUserNames, String transactionMonths) {
+			String transactionCustomerUserNames, String transactionMonths, String outputUsers, String outputDevices,
+			String outputOldUssdAccounts, boolean skipUsers, boolean skipDevices, boolean skipOldUssdAccounts) {
 		this.help = help;
 		this.configPath = configPath;
 		this.output = output;
@@ -49,6 +56,12 @@ public final class CliOptions {
 		this.beneficiaryCustomerUserNames = beneficiaryCustomerUserNames;
 		this.transactionCustomerUserNames = transactionCustomerUserNames;
 		this.transactionMonths = transactionMonths;
+		this.outputUsers = outputUsers;
+		this.outputDevices = outputDevices;
+		this.outputOldUssdAccounts = outputOldUssdAccounts;
+		this.skipUsers = skipUsers;
+		this.skipDevices = skipDevices;
+		this.skipOldUssdAccounts = skipOldUssdAccounts;
 	}
 
 	public boolean help() {
@@ -125,5 +138,29 @@ public final class CliOptions {
 
 	public Optional<String> transactionMonths() {
 		return Optional.ofNullable(transactionMonths);
+	}
+
+	public Optional<String> outputUsers() {
+		return Optional.ofNullable(outputUsers);
+	}
+
+	public Optional<String> outputDevices() {
+		return Optional.ofNullable(outputDevices);
+	}
+
+	public Optional<String> outputOldUssdAccounts() {
+		return Optional.ofNullable(outputOldUssdAccounts);
+	}
+
+	public boolean skipUsers() {
+		return skipUsers;
+	}
+
+	public boolean skipDevices() {
+		return skipDevices;
+	}
+
+	public boolean skipOldUssdAccounts() {
+		return skipOldUssdAccounts;
 	}
 }

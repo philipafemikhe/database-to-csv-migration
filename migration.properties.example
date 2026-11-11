@@ -18,6 +18,13 @@ output.customerInfo=customer_info_migrated.csv
 # Where transaction.csv (from dbo.Transactions) is written, with its own sibling warnings.log.
 output.transactions=transaction_migrated.csv
 
+# Column-for-column copies of dbo.Users, dbo.Devices and dbo.Old_Ussd_Account, per
+# MobileBanking_Users_Devices_OldUSSDAccount_Mapping.xlsx. Users and Devices are always written one
+# file per country (e.g. users_migrated_MW.csv); Old_Ussd_Account has no country, so it's one file.
+output.users=users_migrated.csv
+output.devices=devices_migrated.csv
+output.oldUssdAccounts=old_ussd_account_migrated.csv
+
 # beneficiary_id values from PaymentBeneficiaries are offset by this amount so they can't
 # collide with TransferBeneficiaries ids in the merged output.
 payment.id.offset=900000000
@@ -37,6 +44,7 @@ payment.id.offset=900000000
 # bankBranches.table=dbo.BankBranches
 # devices.table=dbo.Devices
 # transactions.table=dbo.Transactions
+# oldUssdAccount.table=dbo.Old_Ussd_Account
 
 # --- Banks table ---
 # Defaults below match the confirmed schema: id, code, deleted, enabled, gatewayCode, name,
