@@ -134,6 +134,15 @@ csv/      the output CSV writer
 
 ## Mapping notes
 
+### Disabled users (`disable_user = 1`)
+
+Users with `Users.disable_user = 1` are left out of every output, along with everything they own:
+`users`, `customer_info`, `devices` (by `customer_id`), `old_ussd_account` (by `userName`),
+`beneficiary_details` (Transfer and Payment beneficiaries, by `customer_id`) and `transaction`
+(by `customer_id`). A NULL `disable_user` counts as not disabled, and rows whose `customer_id` is
+NULL or not in Users are unaffected. If the Users table has no `disable_user` column, a warning is
+logged and nothing is excluded.
+
 ### users / devices / old_ussd_account
 
 Field mapping comes from `MobileBanking_Users_Devices_OldUSSDAccount_Mapping.xlsx` in
@@ -141,10 +150,10 @@ Field mapping comes from `MobileBanking_Users_Devices_OldUSSDAccount_Mapping.xls
 as-is, except:
 
 - "boolean value 0 = FALSE, 1 = TRUE, Blank = FALSE" columns (`has_ussd`, `old_ussd_account`,
-  `has_mobile`, `ussd_disabled`, `login_retries`, `is_deleted`, `disable_user`, `display_banner`,
-  `force_password_reset`, and devices' `active`) are written `TRUE`/`FALSE`. `loginRetries` is a
-  `bigint` count in the source: values other than 0/1 are written `TRUE` and warned.
-- `corporate_user_hierarchy` defaults to `0` when NULL.
+  `has_mobile`, `ussd_disabled`, `is_deleted`, `disable_user`, `display_banner`,
+  `force_password_reset`, and devices' `active`) are written `TRUE`/`FALSE`.
+- `login_retries` is an integer count (`bigint` in the source) and is copied as-is.
+- `login_retries` and `corporate_user_hierarchy` default to `0` when NULL.
 - Numbers are never written in exponential notation (mobile/phone numbers, account numbers,
   `imsinumber`, `uuid`, ...), including text values an Excel round-trip stored as e.g.
   `2.60973641672E+11`.

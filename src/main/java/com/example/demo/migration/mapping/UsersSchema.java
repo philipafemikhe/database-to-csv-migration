@@ -55,7 +55,7 @@ public final class UsersSchema {
 			copy("ussdLastLogin", "ussd_last_login"),
 			copy("migratedDate", "migrated_date"),
 			copy("loginDisabled", "login_disabled"),
-			bool("loginRetries", "login_retries"),
+			defaultZero("loginRetries", "login_retries"),
 			copy("cachedAccount", "cached_account"),
 			copy("dateAccountCached", "date_account_cached"),
 			copy("imsi", "imsi"),

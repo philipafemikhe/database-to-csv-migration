@@ -37,15 +37,23 @@ public final class DirectCopySource {
 	/**
 	 * @param filterColumn the column {@code filterIds} restricts (e.g. "id" or "customer_id"), or null
 	 * @param filterIds    ids to restrict to; empty means every row
+	 * @param exclusion    an extra SQL condition every row must satisfy (e.g. not owned by a disabled user), or null
 	 */
 	public static int migrate(Connection connection, String label, String table, ColumnRule[] rules, String[] header,
-			String filterColumn, List<Long> filterIds, Integer limit, RecordWriter writer, WarningCollector warnings)
-			throws SQLException, IOException {
+			String filterColumn, List<Long> filterIds, String exclusion, Integer limit, RecordWriter writer,
+			WarningCollector warnings) throws SQLException, IOException {
 
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
 		boolean filtered = filterColumn != null && !filterIds.isEmpty();
+		List<String> conditions = new ArrayList<>();
+		if (filtered) {
+			conditions.add(filterColumn + " IN " + CustomerIdFilter.inClausePlaceholders(filterIds.size()));
+		}
+		if (exclusion != null) {
+			conditions.add(exclusion);
+		}
 		String sql = "SELECT " + top + "* FROM " + table
-				+ (filtered ? " WHERE " + filterColumn + " IN " + CustomerIdFilter.inClausePlaceholders(filterIds.size()) : "");
+				+ (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions));
 
 		long start = System.currentTimeMillis();
 		int count = 0;

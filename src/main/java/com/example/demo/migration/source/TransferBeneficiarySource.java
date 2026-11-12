@@ -16,6 +16,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class TransferBeneficiarySource {
@@ -33,8 +34,16 @@ public final class TransferBeneficiarySource {
 		Integer limit = config.rowLimit();
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
 		List<Long> customerIds = CustomerIdFilter.resolve(config.beneficiaryCustomerIds(), config.beneficiaryCustomerUserNames(), users);
+		List<String> conditions = new ArrayList<>();
+		if (!customerIds.isEmpty()) {
+			conditions.add("customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
+		}
+		String notDisabled = users.notOwnedByDisabledUserSql("customer_id");
+		if (notDisabled != null) {
+			conditions.add(notDisabled);
+		}
 		String sql = "SELECT " + top + columns + " FROM " + config.transferBeneficiariesTable()
-				+ (customerIds.isEmpty() ? "" : " WHERE customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
+				+ (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions));
 
 		long start = System.currentTimeMillis();
 		int count = 0;

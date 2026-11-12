@@ -1252,7 +1252,7 @@ class MigrationIntegrationTest {
 		assertEquals("TRUE", u100.get("has_mobile"));
 		assertEquals("FALSE", u100.get("ussd_disabled"));
 		assertEquals("FALSE", u100.get("is_deleted"));
-		assertEquals("TRUE", u100.get("login_retries"));
+		assertEquals("1", u100.get("login_retries"), "loginRetries is an integer count, copied as-is");
 		assertEquals("2", u100.get("corporate_user_hierarchy"));
 		// "same value" bits keep the source 1/0.
 		assertEquals("0", u100.get("login_disabled"));
@@ -1264,12 +1264,9 @@ class MigrationIntegrationTest {
 		CSVRecord u200 = usersBw.get("200");
 		assertEquals("260973641672", u200.get("mobile_number"));
 		assertEquals("650109169194084", u200.get("imsinumber"));
-		assertEquals("FALSE", u200.get("login_retries"), "NULL -> FALSE");
+		assertEquals("0", u200.get("login_retries"), "NULL -> default 0");
 		assertEquals("0", u200.get("corporate_user_hierarchy"), "NULL -> default 0");
-		// loginRetries=3 isn't 0/1: TRUE, with a warning.
-		assertEquals("TRUE", usersZw.get("300").get("login_retries"));
-		assertTrue(Files.readAllLines(tempDir.resolve(findWarningsLog("users"))).stream()
-				.anyMatch(line -> line.contains("loginRetries value 3")));
+		assertEquals("3", usersZw.get("300").get("login_retries"));
 
 		// Devices follow their owning user's country: device 1 -> user 100 (MW), 2 and 3 -> user 300 (ZW).
 		Map<String, CSVRecord> devicesMw = readCsvById(tempDir.resolve("devices_MW.csv"), DevicesSchema.HEADER, "id");
@@ -1302,6 +1299,104 @@ class MigrationIntegrationTest {
 		assertFalse(Files.exists(tempDir.resolve("filtered_users_MW.csv")));
 		assertEquals(2, readCsvById(tempDir.resolve("filtered_devices_ZW.csv"), DevicesSchema.HEADER, "id").size());
 		assertFalse(Files.exists(tempDir.resolve("filtered_devices_MW.csv")));
+	}
+
+	@Test
+	void excludesDisabledUsersAndEverythingTheyOwn() throws Exception {
+		try (Statement st = connection.createStatement()) {
+			st.execute("ALTER TABLE dbo.Users ADD COLUMN disable_user INT");
+			st.execute("UPDATE dbo.Users SET disable_user = 1 WHERE id = 300");
+			st.execute("UPDATE dbo.Users SET disable_user = 0 WHERE id = 100");
+			// 200, 250, 400 keep disable_user NULL: not disabled.
+			st.execute("UPDATE dbo.Transactions SET customer_id = 300 WHERE id IN (9001, 9002)");
+			st.execute("CREATE TABLE dbo.Old_Ussd_Account (id BIGINT, emailAddress VARCHAR(255), fullName VARCHAR(255),\n"
+					+ "  password VARCHAR(255), phoneNumber VARCHAR(255), primaryAccountNumber VARCHAR(255), userName VARCHAR(255))");
+			st.execute("INSERT INTO dbo.Old_Ussd_Account VALUES\n"
+					+ "  (1, NULL, 'Disabled', 'h1', NULL, NULL, 'R000300'),\n"
+					+ "  (2, NULL, 'Active', 'h2', NULL, NULL, 'R000250'),\n"
+					+ "  (3, NULL, 'No user', 'h3', NULL, NULL, NULL)\n");
+		}
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		assertTrue(users.hasDisableUserColumn());
+		assertEquals(java.util.Collections.singleton(300L), users.disabledIds());
+		BanksRepository banks = BanksRepository.load(connection, config);
+		BankBranchesRepository branches = BankBranchesRepository.load(connection, config.bankBranchesTable());
+		BillersRepository billers = BillersRepository.load(connection, config);
+		ProductsRepository products = ProductsRepository.load(connection, config);
+		DevicesRepository devices = DevicesRepository.load(connection, config.devicesTable());
+		CountryPartnerRepository countries = CountryPartnerRepository.load(connection, config);
+		String runTimestamp = "2026-07-20 10:00:00.000";
+
+		// Beneficiaries: transfer 11 and payments 500, 501, 509-513, 516, 517, 521 belong to user 300.
+		Path beneficiaryPath = tempDir.resolve("beneficiary_disabled.csv");
+		int transferCount;
+		int paymentCount;
+		try (CsvWriter writer = new CsvWriter(beneficiaryPath, BeneficiaryDetailsSchema.HEADER)) {
+			transferCount = TransferBeneficiarySource.migrate(connection, config, users, banks, branches, writer, runTimestamp, new WarningCollector("TransferBeneficiaries"));
+			paymentCount = PaymentBeneficiarySource.migrate(connection, config, users, billers, products, writer, runTimestamp, new WarningCollector("PaymentBeneficiaries"));
+		}
+		assertEquals(14, transferCount);
+		assertEquals(12, paymentCount);
+		Map<String, CSVRecord> beneficiaries = readCsvById(beneficiaryPath, BeneficiaryDetailsSchema.HEADER, "beneficiary_id");
+		assertFalse(beneficiaries.containsKey("11"), "user 300's transfer beneficiary must be excluded");
+		assertTrue(beneficiaries.containsKey("12"), "a beneficiary whose customer isn't in Users is still migrated");
+
+		// customer_info: every user but 300.
+		Path customerInfoPath = tempDir.resolve("customer_info_disabled.csv");
+		try (CsvWriter writer = new CsvWriter(customerInfoPath, CustomerInfoSchema.HEADER)) {
+			CustomerInfoSource.migrate(config, users, branches, devices, countries, writer, runTimestamp, new WarningCollector("Users"));
+		}
+		assertEquals(new java.util.HashSet<>(java.util.Arrays.asList("100", "200", "250", "400")),
+				readCsvById(customerInfoPath, CustomerInfoSchema.HEADER, "id").keySet());
+
+		// Transactions: 9001 and 9002 now belong to user 300.
+		Path transactionPath = tempDir.resolve("transaction_disabled.csv");
+		int transactionCount;
+		try (CsvWriter writer = new CsvWriter(transactionPath, TransactionSchema.HEADER)) {
+			transactionCount = TransactionSource.migrate(connection, config, users, banks, billers, products, writer, new WarningCollector("Transactions"));
+		}
+		assertEquals(28, transactionCount);
+		Map<String, CSVRecord> transactions = readCsvById(transactionPath, TransactionSchema.HEADER, "id");
+		assertFalse(transactions.containsKey("9001"));
+		assertFalse(transactions.containsKey("9002"));
+		assertTrue(transactions.containsKey("9023"), "a transaction whose customer isn't in Users is still migrated");
+
+		// users / devices / old_ussd_account copies.
+		config.override("output.users", tempDir.resolve("disabled_users.csv").toString());
+		config.override("output.devices", tempDir.resolve("disabled_devices.csv").toString());
+		config.override("output.oldUssdAccounts", tempDir.resolve("disabled_old_ussd.csv").toString());
+		new MigrationRunner(connection, config).run(false, false, false, true, true, true, false);
+		assertFalse(Files.exists(tempDir.resolve("disabled_users_ZW.csv")), "user 300 is the only ZW user");
+		assertFalse(Files.exists(tempDir.resolve("disabled_devices_ZW.csv")), "devices 2 and 3 belong to user 300");
+		assertEquals(java.util.Collections.singleton("100"),
+				readCsvById(tempDir.resolve("disabled_users_MW.csv"), UsersSchema.HEADER, "id").keySet(), "disable_user = 0 is kept");
+		assertEquals(java.util.Collections.singleton("200"),
+				readCsvById(tempDir.resolve("disabled_users_BW.csv"), UsersSchema.HEADER, "id").keySet(), "disable_user NULL is kept");
+		assertTrue(Files.exists(tempDir.resolve("disabled_users_ZM.csv")));
+		assertTrue(Files.exists(tempDir.resolve("disabled_users_UNKNOWN.csv")));
+		assertTrue(Files.exists(tempDir.resolve("disabled_devices_MW.csv")));
+		assertEquals(new java.util.HashSet<>(java.util.Arrays.asList("2", "3")),
+				readCsvById(tempDir.resolve("disabled_old_ussd.csv"), OldUssdAccountSchema.HEADER, "id").keySet());
+	}
+
+	@Test
+	void textDisableUserColumnIsComparedAsTextWithoutConversionErrors() throws Exception {
+		try (Statement st = connection.createStatement()) {
+			st.execute("ALTER TABLE dbo.Users ADD COLUMN disable_user VARCHAR(10)");
+			st.execute("UPDATE dbo.Users SET disable_user = ' 1 ' WHERE id = 300");
+			st.execute("UPDATE dbo.Users SET disable_user = 'N' WHERE id = 100");
+			st.execute("UPDATE dbo.Users SET disable_user = '0' WHERE id = 200");
+		}
+		UsersRepository users = UsersRepository.load(connection, config.usersTable());
+		assertEquals(java.util.Collections.singleton(300L), users.disabledIds());
+
+		config.override("output.users", tempDir.resolve("text_users.csv").toString());
+		config.override("output.devices", tempDir.resolve("text_devices.csv").toString());
+		new MigrationRunner(connection, config).run(false, false, false, true, true, false, false);
+		assertFalse(Files.exists(tempDir.resolve("text_users_ZW.csv")));
+		assertFalse(Files.exists(tempDir.resolve("text_devices_ZW.csv")));
+		assertTrue(Files.exists(tempDir.resolve("text_users_MW.csv")), "non-numeric 'N' is kept, not a query failure");
+		assertTrue(Files.exists(tempDir.resolve("text_users_BW.csv")));
 	}
 
 	@Test

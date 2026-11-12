@@ -57,6 +57,10 @@ public final class TransactionSource {
 		if (!customerIds.isEmpty()) {
 			conditions.add("customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
 		}
+		String notDisabled = users.notOwnedByDisabledUserSql("customer_id");
+		if (notDisabled != null) {
+			conditions.add(notDisabled);
+		}
 		int months = config.transactionMonths();
 		// Whole days, so every run on the same day picks the same cutoff. Rows with a NULL
 		// transactionDate don't satisfy the comparison and are excluded along with the old ones.

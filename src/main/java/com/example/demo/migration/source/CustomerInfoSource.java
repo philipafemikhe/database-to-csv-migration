@@ -39,6 +39,9 @@ public final class CustomerInfoSource {
 			if (customerIdFilter != null && !customerIdFilter.contains(user.id())) {
 				continue;
 			}
+			if (users.isDisabled(user.id())) {
+				continue;
+			}
 			writer.write(CustomerInfoMapper.map(user, branches, devices, countries, runTimestamp, warnings));
 			count++;
 			if (count % PROGRESS_INTERVAL == 0) {

@@ -80,6 +80,12 @@ public final class MigrationRunner {
 		CountryPartnerRepository countries = CountryPartnerRepository.load(connection, config);
 		log.info("Loaded Users={} BankBranches={} CountryPartner={}({})",
 				users.size(), branches.size(), countries.size(), countries.isAvailable() ? "available" : "UNAVAILABLE");
+		if (users.hasDisableUserColumn()) {
+			log.info("Excluding {} user(s) with disable_user = 1, and their devices, old USSD accounts, beneficiaries and transactions",
+					users.disabledIds().size());
+		} else {
+			log.warn("{} has no disable_user column; no users are excluded as disabled", config.usersTable());
+		}
 
 		String runTimestamp = TimestampFormat.now();
 
@@ -111,7 +117,7 @@ public final class MigrationRunner {
 			RecordWriter writer = new PerCountryCsvWriter(Paths.get(config.usersOutputPath()), UsersSchema.HEADER,
 					record -> countryCode(parseId(record.get("country_id"))));
 			runDirectCopy("Users", "users", config.usersTable(), UsersSchema.RULES, UsersSchema.HEADER,
-					"id", customerIds, writer, Paths.get(config.usersOutputPath()));
+					"id", customerIds, users.activeUsersSql(), writer, Paths.get(config.usersOutputPath()));
 		}
 		if (doDevices) {
 			RecordWriter writer = new PerCountryCsvWriter(Paths.get(config.devicesOutputPath()), DevicesSchema.HEADER, record -> {
@@ -119,23 +125,26 @@ public final class MigrationRunner {
 				return owner == null ? null : countryCode(owner.countryId());
 			});
 			runDirectCopy("Devices", "devices", config.devicesTable(), DevicesSchema.RULES, DevicesSchema.HEADER,
-					"customer_id", customerIds, writer, Paths.get(config.devicesOutputPath()));
+					"customer_id", customerIds, users.notOwnedByDisabledUserSql("customer_id"), writer,
+					Paths.get(config.devicesOutputPath()));
 		}
 		if (doOldUssdAccounts) {
 			Path outputPath = Paths.get(config.oldUssdAccountsOutputPath());
 			runDirectCopy("Old_Ussd_Account", "old_ussd_account", config.oldUssdAccountTable(), OldUssdAccountSchema.RULES,
-					OldUssdAccountSchema.HEADER, null, Collections.<Long>emptyList(),
+					OldUssdAccountSchema.HEADER, null, Collections.<Long>emptyList(), users.notDisabledUserNameSql("userName"),
 					new CsvWriter(outputPath, OldUssdAccountSchema.HEADER), outputPath);
 		}
 	}
 
 	private void runDirectCopy(String label, String outputName, String table, ColumnRule[] rules,
-			String[] header, String filterColumn, List<Long> filterIds, RecordWriter writer, Path outputPath) throws Exception {
+			String[] header, String filterColumn, List<Long> filterIds, String exclusion, RecordWriter writer, Path outputPath)
+			throws Exception {
 		WarningCollector warnings = new WarningCollector(label);
 		int count;
 		try (RecordWriter w = writer) {
 			log.info("Migrating {} -> {}", table, outputPath.toAbsolutePath());
-			count = DirectCopySource.migrate(connection, label, table, rules, header, filterColumn, filterIds, config.rowLimit(), w, warnings);
+			count = DirectCopySource.migrate(connection, label, table, rules, header, filterColumn, filterIds, exclusion,
+					config.rowLimit(), w, warnings);
 		}
 		Path warningsPath = warnings.isEmpty() ? null : ValidationWarning.writeLog(outputPath, warnings.all());
 		log.info("{}: wrote {} rows to {}; {} warning(s){}",
