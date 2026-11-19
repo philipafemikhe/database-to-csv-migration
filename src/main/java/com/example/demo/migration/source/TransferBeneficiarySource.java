@@ -35,6 +35,8 @@ public final class TransferBeneficiarySource {
 		String top = limit == null ? "" : "TOP (" + limit + ") ";
 		List<Long> customerIds = CustomerIdFilter.resolve(config.beneficiaryCustomerIds(), config.beneficiaryCustomerUserNames(), users);
 		List<String> conditions = new ArrayList<>();
+		// No transactionType means no beneficiary_type can be derived, so the row isn't migrated at all.
+		conditions.add("transactionType IS NOT NULL AND LTRIM(RTRIM(transactionType)) <> ''");
 		if (!customerIds.isEmpty()) {
 			conditions.add("customer_id IN " + CustomerIdFilter.inClausePlaceholders(customerIds.size()));
 		}

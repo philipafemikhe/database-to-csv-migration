@@ -151,7 +151,8 @@ as-is, except:
 
 - "boolean value 0 = FALSE, 1 = TRUE, Blank = FALSE" columns (`has_ussd`, `old_ussd_account`,
   `has_mobile`, `ussd_disabled`, `is_deleted`, `disable_user`, `display_banner`,
-  `force_password_reset`, and devices' `active`) are written `TRUE`/`FALSE`.
+  `force_password_reset`, users' `active` and `migrated_pin`, and devices' `active` and
+  `device_state`) are written `TRUE`/`FALSE`.
 - `login_retries` is an integer count (`bigint` in the source) and is copied as-is.
 - `login_retries` and `corporate_user_hierarchy` default to `0` when NULL.
 - Numbers are never written in exponential notation (mobile/phone numbers, account numbers,
@@ -172,6 +173,8 @@ as-is, except:
 
 Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/main/resources/`.
 
+- `TransferBeneficiaries` rows with a NULL or blank `transactionType` are not migrated at all: no
+  `beneficiary_type` can be derived for them.
 - `customer_id` comes from `Users.userName`, looked up by the beneficiary row's `customer_id`.
 - `customer_country_code` comes from `Users.country_id`, mapped via `IswCountry`'s fixed 1-4
   table (1=Malawi/MW, 2=Botswana/BW, 3=Zimbabwe/ZW, 4=Zambia/ZM) - the same fixed table the

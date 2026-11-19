@@ -191,7 +191,9 @@ class MigrationIntegrationTest {
 					+ "  (12, 'Unresolved Customer', '888', 88, 999, 'MWK', 'LOCAL', NULL),\n"
 					+ "  (13, 'Zambia RTGS Wallet Guy', '999', 115, 250, 'ZMW', 'RTGS', NULL),\n"
 					+ "  (14, 'Zambia RTGS NoInstant Guy', '1010', 22, 250, 'ZMW', 'RTGS', NULL),\n"
-					+ "  (15, 'Malawi School Fees Guy', '1111', NULL, 100, 'MWK', 'SchoolTransaction', NULL)\n");
+					+ "  (15, 'Malawi School Fees Guy', '1111', NULL, 100, 'MWK', 'SchoolTransaction', NULL),\n"
+					+ "  (16, 'Null Type Guy', '1212', 88, 200, 'BWP', NULL, NULL),\n"
+					+ "  (17, 'Blank Type Guy', '1313', 88, 200, 'BWP', '  ', NULL)\n");
 
 			st.execute("CREATE TABLE dbo.PaymentBeneficiaries (\n"
 					+ "  id BIGINT, additionalParams VARCHAR(2000), customer_id BIGINT, biller_id BIGINT, product_id BIGINT,\n"
@@ -1254,6 +1256,9 @@ class MigrationIntegrationTest {
 		assertEquals("FALSE", u100.get("is_deleted"));
 		assertEquals("1", u100.get("login_retries"), "loginRetries is an integer count, copied as-is");
 		assertEquals("2", u100.get("corporate_user_hierarchy"));
+		assertEquals("FALSE", u100.get("migrated_pin"));
+		assertEquals("TRUE", usersZw.get("300").get("migrated_pin"));
+		assertEquals("FALSE", u100.get("active"), "column absent from fixture -> FALSE");
 		// "same value" bits keep the source 1/0.
 		assertEquals("0", u100.get("login_disabled"));
 		// Columns the fixture table doesn't have: blank, FALSE for booleans.
@@ -1280,6 +1285,7 @@ class MigrationIntegrationTest {
 		assertEquals("-24.6282", d1.get("latitude"));
 		assertEquals("2026-06-16 13:06:00.000", d1.get("registration_completed"));
 		assertEquals("FALSE", devicesZw.get("2").get("active"));
+		assertEquals("FALSE", d1.get("device_state"), "column absent from fixture -> FALSE");
 
 		Map<String, CSVRecord> oldUssd = readCsvById(oldUssdPath, OldUssdAccountSchema.HEADER, "id");
 		assertEquals(2, oldUssd.size());
