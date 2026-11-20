@@ -600,8 +600,9 @@ class MigrationIntegrationTest {
 		CSVRecord p24 = byId.get(String.valueOf(521 + offset));
 		assertEquals("Member Number", p24.get("admin_remarks"));
 
-		// TransferBeneficiaries warnings: mismatch(row2), missing branch(row3), unknown type(row11), unresolved customer(row12).
-		assertEquals(4, transferWarnings.size(), "transfer warnings: " + transferWarnings.all());
+		// TransferBeneficiaries warnings: mismatch(row2), unknown type(row11), unresolved customer(row12).
+		// Row 3's NULL bankBranch_id is intentionally not logged.
+		assertEquals(3, transferWarnings.size(), "transfer warnings: " + transferWarnings.all());
 		// PaymentBeneficiaries warnings: invalid json(row502) + unresolved customer fallback(row502) + biller_id 6 not found(row501).
 		assertEquals(3, paymentWarnings.size(), "payment warnings: " + paymentWarnings.all());
 	}
@@ -1285,7 +1286,7 @@ class MigrationIntegrationTest {
 		assertEquals("-24.6282", d1.get("latitude"));
 		assertEquals("2026-06-16 13:06:00.000", d1.get("registration_completed"));
 		assertEquals("FALSE", devicesZw.get("2").get("active"));
-		assertEquals("FALSE", d1.get("device_state"), "column absent from fixture -> FALSE");
+		assertEquals("", d1.get("device_state"), "integer column, copied as-is; absent from fixture -> blank");
 
 		Map<String, CSVRecord> oldUssd = readCsvById(oldUssdPath, OldUssdAccountSchema.HEADER, "id");
 		assertEquals(2, oldUssd.size());

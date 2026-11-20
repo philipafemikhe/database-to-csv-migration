@@ -151,9 +151,10 @@ as-is, except:
 
 - "boolean value 0 = FALSE, 1 = TRUE, Blank = FALSE" columns (`has_ussd`, `old_ussd_account`,
   `has_mobile`, `ussd_disabled`, `is_deleted`, `disable_user`, `display_banner`,
-  `force_password_reset`, users' `active` and `migrated_pin`, and devices' `active` and
-  `device_state`) are written `TRUE`/`FALSE`.
+  `force_password_reset`, users' `active` and `migrated_pin`, and devices' `active`) are written
+  `TRUE`/`FALSE`.
 - `login_retries` is an integer count (`bigint` in the source) and is copied as-is.
+- Devices' `device_state` is an integer (`int` in the source) and is copied as-is.
 - `login_retries` and `corporate_user_hierarchy` default to `0` when NULL.
 - Numbers are never written in exponential notation (mobile/phone numbers, account numbers,
   `imsinumber`, `uuid`, ...), including text values an Excel round-trip stored as e.g.
@@ -209,6 +210,8 @@ Field mapping comes from `TransferBeneficaries_Migration_Logic.xlsx` in `src/mai
   Botswana/EFT validation above (populated for any country/type whenever `bankBranch_id` resolves,
   even when the bank-id mismatch check above blanks out `branch_name`). Previously this was the
   raw `bankBranch_id` passed straight through; now it's the branch's own gateway code.
+- A NULL `bankBranch_id` is not logged as a warning (even for Botswana `EFT`): the row is still
+  migrated with the branch fields left blank.
 - `PaymentBeneficiaries` rows have no bank/branch reference at all, so those fields are left
   blank for them; `customer_id`/`beneficiary_name`/`account_number`/`beneficiary_currency` are
   parsed from the `additionalParams` JSON blob (falling back to `destinationAccountNumber` /

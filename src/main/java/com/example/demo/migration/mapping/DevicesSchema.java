@@ -10,7 +10,7 @@ public final class DevicesSchema {
 			copy("id", "id"),
 			bool("active", "active"),
 			copy("deviceModel", "device_model"),
-			bool("deviceState", "device_state"),
+			copy("deviceState", "device_state"),
 			copy("latitude", "latitude"),
 			copy("longitude", "longitude"),
 			copy("nickname", "nickname"),

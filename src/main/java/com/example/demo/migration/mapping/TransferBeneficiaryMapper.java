@@ -101,11 +101,8 @@ public final class TransferBeneficiaryMapper {
 
 		BankBranchRecord branch = bankBranchId == null ? null : branches.findById(bankBranchId);
 		boolean botswanaEft = countryIsBotswana && "EFT".equalsIgnoreCase(transactionType);
-		if (bankBranchId == null) {
-			if (botswanaEft) {
-				warnings.warn(oldId, "Botswana EFT row has no bankBranch_id; branch_name left blank");
-			}
-		} else if (branch == null) {
+		// A NULL bankBranch_id is not logged: the row still migrates, just without branch fields.
+		if (bankBranchId != null && branch == null) {
 			warnings.warn(oldId, "bankBranch_id " + bankBranchId + " not found in BankBranches; branch_code left blank"
 					+ (botswanaEft ? " and branch_name left blank" : ""));
 		}
